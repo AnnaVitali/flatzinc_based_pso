@@ -1,0 +1,7 @@
+output ["x1 = ",showDzn(x1),";\n","x2 = ",showDzn(x2),";\n","x3 = ",showDzn(x3),";\n","p = ",showDzn(p),";\n","q = ",showDzn(q),";\n","r = ",showDzn(r),";\n"];
+int: r;
+int: q;
+int: p;
+float: x3;
+float: x2;
+float: x1;

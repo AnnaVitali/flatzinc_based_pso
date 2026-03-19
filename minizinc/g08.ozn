@@ -1,0 +1,3 @@
+output ["x1 = ",showDzn(x1),";\n","x2 = ",showDzn(x2),";\n"];
+float: x2;
+float: x1;

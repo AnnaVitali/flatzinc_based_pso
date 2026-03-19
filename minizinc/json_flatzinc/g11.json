@@ -1,0 +1,21 @@
+{
+  "variables": {
+    "x1" : { "type" : "float", "domain" : [[-1.0, 1.0]] },
+    "x2" : { "type" : "float", "domain" : [[-1.0, 1.0]], "defined" : true },
+    "objective" : { "type" : "float", "defined" : true },
+    "X_INTRODUCED_1_" : { "type" : "float", "domain" : [[-2.0, 0.0]], "introduced": true, "defined" : true },
+    "X_INTRODUCED_2_" : { "type" : "float", "introduced": true, "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "float_pow", "args" : ["X_INTRODUCED_1_", 2.0, "X_INTRODUCED_2_"], "defines" : "X_INTRODUCED_2_"},
+    { "id" : "float_pow", "args" : ["x1", 2.0, "x2"], "defines" : "x2"},
+    { "id" : "float_lin_eq", "args" : [[1.0, 1.0, -1.0], ["x2", "X_INTRODUCED_2_", "objective"], -0.0], "defines" : "objective"},
+    { "id" : "float_lin_eq", "args" : [[1.0, -1.0], ["x2", "X_INTRODUCED_1_"], 1.0], "defines" : "X_INTRODUCED_1_"}
+  ],
+  "output": ["x1", "x2"],
+  "solve": { "method" : "minimize", "objective" : "objective" },
+  "version": "1.0"
+}

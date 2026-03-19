@@ -1,0 +1,5 @@
+output ["x1 = ",showDzn(x1),";\n","x2 = ",showDzn(x2),";\n","x3 = ",showDzn(x3),";\n","x4 = ",showDzn(x4),";\n"];
+float: x4;
+float: x3;
+float: x2;
+float: x1;

@@ -1,0 +1,15 @@
+output ["x1 = ",showDzn(x1),";\n","x2 = ",showDzn(x2),";\n","x3 = ",showDzn(x3),";\n","x4 = ",showDzn(x4),";\n","x5 = ",showDzn(x5),";\n","x6 = ",showDzn(x6),";\n","x7 = ",showDzn(x7),";\n","x8 = ",showDzn(x8),";\n","x9 = ",showDzn(x9),";\n","x10 = ",showDzn(x10),";\n","x11 = ",showDzn(x11),";\n","x12 = ",showDzn(x12),";\n","x13 = ",showDzn(x13),";\n","objective = ",showDzn(objective),";\n"];
+float: objective;
+float: x13;
+float: x12;
+float: x11;
+float: x10;
+float: x9;
+float: x8;
+float: x7;
+float: x6;
+float: x5;
+float: x4;
+float: x3;
+float: x2;
+float: x1;

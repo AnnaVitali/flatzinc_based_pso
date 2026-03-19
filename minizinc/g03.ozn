@@ -1,0 +1,4 @@
+output ["x = ",showDzn(x),";\n","prefix_prod_x = ",showDzn(prefix_prod_x),";\n"];
+int: n = 10;
+array [1..n] of float: prefix_prod_x;
+array [1..n] of float: x;
