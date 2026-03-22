@@ -2,12 +2,12 @@ import subprocess
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "minizinc"
 JSON_DIR = ROOT / MODELS_DIR / "json_flatzinc"
 
 def main() -> None:
-    for index in range(1, 13):
+    for index in range(1, 14):
         problem = f"g{index:02d}"
 
         model_path = MODELS_DIR / f"{problem}.mzn"

@@ -1,9 +1,2 @@
-pub mod viol_pso;
+pub mod flatzinc_based_pso;
 pub mod pso;
-pub mod correlation_based_pso;
-pub mod correlation_matrix_pso;
-pub mod de;
-pub mod feasibility_jump;
-pub mod violation_ls;
-pub mod pso_base;
-pub mod pso_no_graph;

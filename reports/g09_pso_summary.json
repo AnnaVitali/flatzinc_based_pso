@@ -1,0 +1,19 @@
+{
+  "model": "g09",
+  "algorithm": "pso",
+  "runs": 10,
+  "objective": {
+    "count": 10,
+    "best": 687.7763663142397,
+    "mean": 691.1493526444656,
+    "std": 2.6663943216057997,
+    "worst": 695.7560773029899
+  },
+  "violation": {
+    "count": 10,
+    "best": 0.0,
+    "mean": 0.0,
+    "std": 0.0,
+    "worst": 0.0
+  }
+}
