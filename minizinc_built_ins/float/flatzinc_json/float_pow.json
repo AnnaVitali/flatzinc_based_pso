@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "float" },
+    "b" : { "type" : "float" },
+    "c" : { "type" : "float", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "float_pow", "args" : ["a", "b", "c"], "defines" : "c"}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

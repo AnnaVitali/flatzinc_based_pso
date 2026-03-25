@@ -1,0 +1,3 @@
+output ["x = ",showDzn(x),";\n","y = ",showDzn(y),";\n"];
+float: y;
+int: x;

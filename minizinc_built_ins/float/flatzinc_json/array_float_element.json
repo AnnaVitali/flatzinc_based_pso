@@ -1,0 +1,15 @@
+{
+  "variables": {
+    "b" : { "type" : "int", "domain" : [[1, 3]] },
+    "c" : { "type" : "float", "domain" : [[1.0, 3.0]], "defined" : true }
+  },
+  "arrays": {
+    "X_INTRODUCED_1_" : { "a": [1.0, 2.0, 3.0] }
+  },
+  "constraints": [
+    { "id" : "array_float_element", "args" : ["b", "X_INTRODUCED_1_", "c"], "defines" : "c"}
+  ],
+  "output": ["b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

@@ -1,0 +1,18 @@
+{
+  "variables": {
+    "a" : { "type" : "bool" },
+    "b" : { "type" : "bool" },
+    "r" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "bool_clause", "args" : [["b"], ["a", "r"]], "defines" : "r"},
+    { "id" : "bool_clause", "args" : [["r"], ["b"]]},
+    { "id" : "bool_clause", "args" : [["a", "r"], []]}
+  ],
+  "output": ["a", "b", "r"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

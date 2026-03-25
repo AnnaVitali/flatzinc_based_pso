@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "b" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "c" : { "type" : "set of int", "domain" : [[1, 5]], "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "set_diff", "args" : ["a", "b", "c"], "defines" : "c"}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

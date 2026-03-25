@@ -1,0 +1,12 @@
+output ["height = ",showDzn(height),";\n","width = ",showDzn(width),";\n","x = ",let {array [int] of string: X_INTRODUCED_101_ = [_toString_Squares(X_INTRODUCED_99_,true,false) | X_INTRODUCED_99_ in index_set(x)], array [int] of string: X_INTRODUCED_102_ = [showDzn(x[X_INTRODUCED_100_]) | X_INTRODUCED_100_ in index_set(x)]} in (show_indexed(X_INTRODUCED_101_,X_INTRODUCED_102_)),";\n","y = ",let {array [int] of string: X_INTRODUCED_105_ = [_toString_Squares(X_INTRODUCED_103_,true,false) | X_INTRODUCED_103_ in index_set(y)], array [int] of string: X_INTRODUCED_106_ = [showDzn(y[X_INTRODUCED_104_]) | X_INTRODUCED_104_ in index_set(y)]} in (show_indexed(X_INTRODUCED_105_,X_INTRODUCED_106_)),";\n"];
+function string : _toString_Squares(opt Squares: X_INTRODUCED_56_,bool: X_INTRODUCED_57_,bool: X_INTRODUCED_58_) = if absent(X_INTRODUCED_56_) then if X_INTRODUCED_58_ then "null" else "<>" endif else (if X_INTRODUCED_58_ then "{ \"c\" : \"Square\", \"e\" : " else if X_INTRODUCED_57_ then showDznId("Square") else "Square" endif++"(" endif++'_1@_toString__constrId_0_Squares'('Square⁻¹'(X_INTRODUCED_56_),X_INTRODUCED_57_,X_INTRODUCED_58_))++if X_INTRODUCED_58_ then "}" else ")" endif endif;
+function string : '_1@_toString__constrId_0_Squares'(opt int: X_INTRODUCED_75_,bool: X_INTRODUCED_76_,bool: X_INTRODUCED_77_) = show(X_INTRODUCED_75_);
+function opt _constrId_0_Squares : 'Square⁻¹'(opt Squares: X_INTRODUCED_43_) = if occurs(X_INTRODUCED_43_) then 'Square⁻¹'(deopt(X_INTRODUCED_43_)) else to_enum(_constrId_0_Squares,<>) endif;
+function _constrId_0_Squares : 'Square⁻¹'(Squares: X_INTRODUCED_41_) = to_enum(_constrId_0_Squares,X_INTRODUCED_41_-_constrMin_0_Squares);
+set of int: Squares = 1..10;
+array [Squares] of int: y = [0,0,0,0,0,0,0,0,0,0];
+int: _constrMin_0_Squares = 0;
+set of int: _constrId_0_Squares = 1..10;
+array [Squares] of int: x = [0,0,0,0,0,0,0,0,0,0];
+int: width = 5;
+int: height = 7;

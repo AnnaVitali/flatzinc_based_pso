@@ -14,3 +14,6 @@ rand_chacha = "0.10.0"
 rand_distr = "0.6.0"
 petgraph = "0.8.3"
 serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+debug=true

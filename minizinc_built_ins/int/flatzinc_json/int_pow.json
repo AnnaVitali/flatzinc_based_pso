@@ -1,0 +1,21 @@
+{
+  "variables": {
+    "a" : { "type" : "int" },
+    "b" : { "type" : "int" },
+    "c" : { "type" : "int", "defined" : true },
+    "X_INTRODUCED_1_" : { "type" : "bool", "introduced": true, "defined" : true },
+    "X_INTRODUCED_2_" : { "type" : "bool", "introduced": true, "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "bool_clause", "args" : [["X_INTRODUCED_1_", "X_INTRODUCED_2_"], []]},
+    { "id" : "int_pow", "args" : ["a", "b", "c"], "defines" : "c"},
+    { "id" : "int_ne_reif", "args" : ["a", 0, "X_INTRODUCED_1_"], "defines" : "X_INTRODUCED_1_"},
+    { "id" : "int_le_reif", "args" : [0, "b", "X_INTRODUCED_2_"], "defines" : "X_INTRODUCED_2_"}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

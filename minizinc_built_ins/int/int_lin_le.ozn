@@ -1,0 +1,2 @@
+output ["bs = ",showDzn(bs),";\n"];
+array [1..2] of int: bs;

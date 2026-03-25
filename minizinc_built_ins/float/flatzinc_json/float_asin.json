@@ -1,0 +1,15 @@
+{
+  "variables": {
+    "a" : { "type" : "float" },
+    "b" : { "type" : "float", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "float_asin", "args" : ["a", "b"], "defines" : "b"}
+  ],
+  "output": ["a", "b"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

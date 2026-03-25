@@ -1,0 +1,3 @@
+output ["s = "++format(s)++"\n","c = "++format(c)++"\n"];
+int: c;
+set of int: s;

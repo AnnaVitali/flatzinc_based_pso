@@ -1,0 +1,17 @@
+{
+  "variables": {
+    "X_INTRODUCED_0_" : { "type" : "bool" },
+    "X_INTRODUCED_1_" : { "type" : "bool" },
+    "X_INTRODUCED_2_" : { "type" : "bool" }
+  },
+  "arrays": {
+    "pos" : { "a": ["X_INTRODUCED_0_", "X_INTRODUCED_1_"] },
+    "neg" : { "a": ["X_INTRODUCED_2_"] }
+  },
+  "constraints": [
+    { "id" : "bool_clause", "args" : ["pos", "neg"]}
+  ],
+  "output": ["pos", "neg"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

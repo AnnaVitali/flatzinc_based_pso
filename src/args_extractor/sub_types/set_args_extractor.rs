@@ -1,6 +1,6 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Call, Identifier, Literal};
+use flatzinc_serde::{Argument, Array, Call, Identifier, Literal};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]
@@ -12,6 +12,9 @@ impl SetArgsExtractor {
     pub fn new() -> Self {
         let args_extractor = ArgsExtractor::new();
         Self { args_extractor }
+    }
+    pub fn extract_literal_identifiers_with_index(&self, args: &[Argument]) -> HashMap<i64, String> {
+        self.args_extractor.extract_literal_identifiers_with_index(args)
     }
 
     pub fn extract_set_value(

@@ -10,6 +10,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
 use crate::data_utility::minizinc_solution_normalizer::MiniZincSolutionNormalizer;
+use crate::functional_evaluator::functional_evaluator::FunctionalEvaluator;
 
 const DEFAULT_SEED: u64 = 42;
 const FEASIBILITY_TOL: f64 = 1e-3;
@@ -27,7 +28,8 @@ pub struct FlatzincBasedParticle {
     local_best_obj: Option<f64>,
     local_best_violation: f64,
     solution_provider: SolutionProvider,
-    invariant_evaluator: Evaluator,
+    //invariant_evaluator: Evaluator,
+    invariant_evaluator: FunctionalEvaluator,
     fzn_path: PathBuf,
     ozn_path: PathBuf,
     rng: ChaCha20Rng,
@@ -117,7 +119,8 @@ impl FlatzincBasedParticle {
         let s = s.strip_prefix("\u{feff}").unwrap_or(&s);
         let fzn: FlatZinc = from_str(s).expect("Failed to parse flatzinc json");
         self.solution_provider = SolutionProvider::new(fzn.clone(), &self.ozn_path);
-        self.invariant_evaluator = Evaluator::new(&*self.fzn_path, fzn.clone(), None);
+        //self.invariant_evaluator = Evaluator::new(&*self.fzn_path, fzn.clone(), None);
+        self.invariant_evaluator = FunctionalEvaluator::new(&*self.fzn_path, fzn.clone(), None);
 
         // collect, sort by trailing numeric suffix, and build maps
         let mut vars: Vec<(String, Variable)> = fzn

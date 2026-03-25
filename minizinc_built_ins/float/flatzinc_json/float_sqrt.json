@@ -1,0 +1,17 @@
+{
+  "variables": {
+    "a" : { "type" : "float" },
+    "b" : { "type" : "float" }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "float_sqrt", "args" : ["a", "b"]},
+    { "id" : "float_le", "args" : [0.0, "b"]},
+    { "id" : "float_le", "args" : [0.0, "b"]}
+  ],
+  "output": ["a", "b"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

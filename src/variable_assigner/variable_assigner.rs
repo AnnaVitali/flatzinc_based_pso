@@ -22,12 +22,11 @@ pub struct VariableAssigner {
 }
 impl VariableAssigner {
     pub fn new(
-        partial_solution: HashMap<String, VariableValue>,
         defined_variable: Vec<String>,
         constraints: Vec<CallWithDefines>,
         arrays: HashMap<Identifier, Array>,
     ) -> Self {
-        let complete_solution = partial_solution.clone();
+        let complete_solution = HashMap::new();
         let int_variable_assigner = IntVariableAssigner::new(arrays.clone());
         let float_variable_assigner = FloatVariableAssigner::new(arrays.clone());
         let bool_variable_assigner = BoolVariableAssigner::new(arrays.clone());
@@ -47,8 +46,9 @@ impl VariableAssigner {
         }
     }
 
-    pub fn search_defined_var_in_constraints(&mut self) -> HashMap<String, VariableValue> {
-        let mut unknow = self.defined_variable.clone(); 
+    pub fn search_defined_var_in_constraints(&mut self, partial_solution: &HashMap<String, VariableValue>) -> HashMap<String, VariableValue> {
+        self.complete_solution = partial_solution.clone();
+        let mut unknow: Vec<String> = self.defined_variable.clone(); 
         let array_keys: HashSet<String> = self
             .arrays
             .keys()

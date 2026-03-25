@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "int" },
+    "b" : { "type" : "int" },
+    "r" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "int_eq_reif", "args" : ["a", "b", "r"], "defines" : "r"}
+  ],
+  "output": ["a", "b", "r"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

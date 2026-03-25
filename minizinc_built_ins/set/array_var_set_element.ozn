@@ -1,0 +1,4 @@
+output ["as = ",showDzn(as),";\n","i = ",showDzn(i),";\n","s = ",showDzn(s),";\n"];
+set of int: s;
+int: i;
+array [1..2] of set of int: as;

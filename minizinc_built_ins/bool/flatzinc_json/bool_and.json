@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "bool" },
+    "b" : { "type" : "bool" },
+    "c" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "array_bool_and", "args" : [["a", "b"], "c"], "defines" : "c"}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

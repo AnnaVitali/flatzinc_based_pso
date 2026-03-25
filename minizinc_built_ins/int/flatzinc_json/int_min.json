@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "int" },
+    "b" : { "type" : "int" },
+    "c" : { "type" : "int", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "int_min", "args" : ["a", "b", "c"], "defines" : "c"}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

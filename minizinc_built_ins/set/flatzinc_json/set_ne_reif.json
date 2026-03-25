@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "b" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "r" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "set_ne_reif", "args" : ["a", "b", "r"], "defines" : "r"}
+  ],
+  "output": ["a", "b", "r"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

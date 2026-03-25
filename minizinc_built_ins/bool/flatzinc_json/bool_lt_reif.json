@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "bool" },
+    "b" : { "type" : "bool" },
+    "r" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "bool_lt_reif", "args" : ["a", "b", "r"], "defines" : "r"}
+  ],
+  "output": ["a", "b", "r"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

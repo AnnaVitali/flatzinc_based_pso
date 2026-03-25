@@ -1,0 +1,17 @@
+{
+  "variables": {
+    "X_INTRODUCED_0_" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "X_INTRODUCED_1_" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "i" : { "type" : "int", "domain" : [[1, 2]] },
+    "s" : { "type" : "set of int", "domain" : [[1, 5]] }
+  },
+  "arrays": {
+    "as" : { "a": ["X_INTRODUCED_0_", "X_INTRODUCED_1_"] }
+  },
+  "constraints": [
+    { "id" : "array_var_set_element", "args" : ["i", "as", "s"], "defines" : "s"}
+  ],
+  "output": ["i", "s", "as"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

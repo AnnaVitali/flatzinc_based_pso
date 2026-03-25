@@ -1,0 +1,2 @@
+output ["x2 = ",showDzn(x2),";\n"];
+float: x2;

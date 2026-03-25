@@ -1,0 +1,17 @@
+{
+  "variables": {
+    "a" : { "type" : "int" },
+    "b" : { "type" : "int", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "int_abs", "args" : ["a", "b"], "defines" : "b"},
+    { "id" : "int_le", "args" : [0, "b"]},
+    { "id" : "int_le", "args" : [0, "b"]}
+  ],
+  "output": ["a", "b"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

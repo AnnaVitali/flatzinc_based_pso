@@ -14,6 +14,11 @@ impl FloatArgsExtractor {
         Self { args_extractor }
     }
 
+    pub fn extract_literal_identifier_with_index(&self, args: &[Argument]) -> HashMap<i64, String> {
+        self.args_extractor
+            .extract_literal_identifiers_with_index(args)
+    }
+
     pub fn extract_literal_identifiers(&self, args: &[Argument]) -> Vec<String> {
         self.args_extractor.extract_literal_identifiers(args)
     }
@@ -35,11 +40,11 @@ impl FloatArgsExtractor {
             Some(Literal::Float(v)) => *v,
             Some(Literal::Identifier(id)) => match solution.get(id) {
                 Some(VariableValue::Float(v)) => *v,
-                Some(other) => panic!("Expected int for variable `{}`, found {:?}", id, other),
+                Some(other) => panic!("Expected float for variable `{}`, found {:?}", id, other),
                 None => panic!("Missing value for variable `{}` referenced in array", id),
             },
             Some(other) => panic!(
-                "Expected int or identifier in array at index {}, found {:?}",
+                "Expected float or identifier in array at index {}, found {:?}",
                 idx, other
             ),
             None => panic!("No value present in array at index {} (out of bounds)", idx),

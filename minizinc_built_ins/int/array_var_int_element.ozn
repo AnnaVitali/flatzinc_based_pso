@@ -1,0 +1,4 @@
+output ["as = ",showDzn(as),";\n","b = ",showDzn(b),";\n","c = ",showDzn(c),";\n"];
+int: c;
+int: b;
+array [1..3] of int: as;

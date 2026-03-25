@@ -1,0 +1,4 @@
+output ["a = ",showDzn(a),";\n","b = ",showDzn(b),";\n","c = ",showDzn(c),";\n"];
+bool: c;
+bool: b;
+bool: a;

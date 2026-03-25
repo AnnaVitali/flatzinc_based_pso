@@ -1,0 +1,30 @@
+{
+  "variables": {
+    "x2" : { "type" : "float", "domain" : [[0.0, 0.8]] },
+    "x1" : { "type" : "float", "domain" : [[-1.0, 0.6]], "defined" : true },
+    "objective" : { "type" : "float", "defined" : true },
+    "X_INTRODUCED_2_" : { "type" : "float", "domain" : [[-1.0, -0.2]], "introduced": true, "defined" : true },
+    "X_INTRODUCED_3_" : { "type" : "float", "introduced": true, "defined" : true },
+    "X_INTRODUCED_4_" : { "type" : "float", "domain" : [[-3.0, -1.4]], "introduced": true, "defined" : true },
+    "X_INTRODUCED_5_" : { "type" : "float", "introduced": true, "defined" : true },
+    "X_INTRODUCED_8_" : { "type" : "float", "introduced": true, "defined" : true },
+    "X_INTRODUCED_11_" : { "type" : "float", "introduced": true, "defined" : true }
+  },
+  "arrays": {
+    "X_INTRODUCED_13_" : { "a": [1.0, 0.25] }
+  },
+  "constraints": [
+    { "id" : "float_pow", "args" : ["X_INTRODUCED_2_", 2.0, "X_INTRODUCED_3_"], "defines" : "X_INTRODUCED_3_"},
+    { "id" : "float_pow", "args" : ["X_INTRODUCED_4_", 2.0, "X_INTRODUCED_5_"], "defines" : "X_INTRODUCED_5_"},
+    { "id" : "float_pow", "args" : ["x1", 2.0, "X_INTRODUCED_8_"], "defines" : "X_INTRODUCED_8_"},
+    { "id" : "float_pow", "args" : ["x2", 2.0, "X_INTRODUCED_11_"], "defines" : "X_INTRODUCED_11_"},
+    { "id" : "float_lin_le", "args" : ["X_INTRODUCED_13_", ["X_INTRODUCED_11_", "X_INTRODUCED_8_"], 1.0]},
+    { "id" : "float_lin_eq", "args" : [[2.0, -1.0], ["x2", "x1"], 1.0], "defines" : "x1"},
+    { "id" : "float_lin_eq", "args" : [[1.0, 1.0, -1.0], ["X_INTRODUCED_5_", "X_INTRODUCED_3_", "objective"], -0.0], "defines" : "objective"},
+    { "id" : "float_lin_eq", "args" : [[1.0, -1.0], ["x2", "X_INTRODUCED_2_"], 1.0], "defines" : "X_INTRODUCED_2_"},
+    { "id" : "float_lin_eq", "args" : [[1.0, -1.0], ["x1", "X_INTRODUCED_4_"], 2.0], "defines" : "X_INTRODUCED_4_"}
+  ],
+  "output": ["x2"],
+  "solve": { "method" : "minimize", "objective" : "objective" },
+  "version": "1.0"
+}

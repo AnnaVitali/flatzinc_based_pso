@@ -1,0 +1,4 @@
+output ["x = ",showDzn(x),";\n","s = ",showDzn(s),";\n","r = ",showDzn(r),";\n"];
+bool: r;
+set of int: s;
+int: x;

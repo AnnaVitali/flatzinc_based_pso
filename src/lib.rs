@@ -6,6 +6,7 @@ pub mod heuristics;
 mod invariant_graph;
 mod data_utility;
 mod evaluator;
+pub mod functional_evaluator;
 
 
 

@@ -1,0 +1,17 @@
+{
+  "variables": {
+    "a" : { "type" : "float" },
+    "b" : { "type" : "float" },
+    "c" : { "type" : "float", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "float_ne", "args" : ["b", -0.0]},
+    { "id" : "float_div", "args" : ["a", "b", "c"], "defines" : "c"}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

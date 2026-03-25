@@ -1,0 +1,3 @@
+output ["x = ",showDzn(x),";\n","s = ",showDzn(s),";\n"];
+set of int: s;
+int: x;

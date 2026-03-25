@@ -1,0 +1,15 @@
+{
+  "variables": {
+    "x" : { "type" : "int" },
+    "y" : { "type" : "float", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "int2float", "args" : ["x", "y"], "defines" : "y"}
+  ],
+  "output": ["x", "y"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

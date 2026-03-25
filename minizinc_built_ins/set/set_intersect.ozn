@@ -1,0 +1,4 @@
+output ["a = ",showDzn(a),";\n","b = ",showDzn(b),";\n","c = ",showDzn(c),";\n"];
+set of int: c;
+set of int: b;
+set of int: a;

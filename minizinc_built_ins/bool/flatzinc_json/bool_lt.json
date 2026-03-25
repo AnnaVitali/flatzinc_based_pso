@@ -1,0 +1,15 @@
+{
+  "variables": {
+    "a" : { "type" : "bool" },
+    "b" : { "type" : "bool" }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "bool_lt", "args" : ["a", "b"]}
+  ],
+  "output": ["a", "b"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

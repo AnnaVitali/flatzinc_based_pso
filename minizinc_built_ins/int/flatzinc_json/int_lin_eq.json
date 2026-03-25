@@ -1,0 +1,14 @@
+{
+  "variables": {
+    "X_INTRODUCED_1_" : { "type" : "int" }
+  },
+  "arrays": {
+    "bs" : { "a": ["X_INTRODUCED_1_", "X_INTRODUCED_1_"] }
+  },
+  "constraints": [
+
+  ],
+  "output": ["bs"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

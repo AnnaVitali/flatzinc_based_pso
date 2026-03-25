@@ -1,0 +1,17 @@
+{
+  "variables": {
+    "a" : { "type" : "int" },
+    "b" : { "type" : "int" },
+    "c" : { "type" : "int" }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "int_ne", "args" : ["b", 0]},
+    { "id" : "int_mod", "args" : ["a", "b", "c"]}
+  ],
+  "output": ["a", "b", "c"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

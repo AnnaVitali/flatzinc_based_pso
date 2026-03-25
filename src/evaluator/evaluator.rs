@@ -85,12 +85,11 @@ impl Evaluator {
             .cloned()
             .collect();
         let mut variable_assigner = VariableAssigner::new(
-            solution_provider.solution_map().clone(),
             defined_variables,
             self.constraints.clone(),
             self.arrays_hashmap.clone(),
         );
-        self.solution = variable_assigner.search_defined_var_in_constraints();
+        self.solution = variable_assigner.search_defined_var_in_constraints(&self.solution);
         let constraint_list: Vec<_> = constraints_to_eval.iter().cloned().collect();
 
         self.evaluate_constraint_list(&constraint_list)
@@ -109,12 +108,11 @@ impl Evaluator {
 
         let start_assigner = std::time::Instant::now();
         let mut variable_assigner = VariableAssigner::new(
-            solution_provider.solution_map().clone(),
             defined_variables,
             self.constraints.clone(),
             self.arrays_hashmap.clone(),
         );
-        self.solution = variable_assigner.search_defined_var_in_constraints();
+        self.solution = variable_assigner.search_defined_var_in_constraints(&self.solution);
         let assigner_time = start_assigner.elapsed().as_micros();
 
         self.graph.detach_evaluation_nodes();

@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "x" : { "type" : "int", "domain" : [[1, 5]] },
+    "s" : { "type" : "set of int", "domain" : [[1, 5]] },
+    "r" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "set_in_reif", "args" : ["x", "s", "r"], "defines" : "r"}
+  ],
+  "output": ["x", "s", "r"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

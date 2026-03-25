@@ -1,0 +1,16 @@
+{
+  "variables": {
+    "a" : { "type" : "float" },
+    "b" : { "type" : "float" },
+    "r" : { "type" : "bool", "defined" : true }
+  },
+  "arrays": {
+
+  },
+  "constraints": [
+    { "id" : "float_eq_reif", "args" : ["a", "b", "r"], "defines" : "r"}
+  ],
+  "output": ["a", "b", "r"],
+  "solve": { "method" : "satisfy" },
+  "version": "1.0"
+}

@@ -1,0 +1,3 @@
+output ["pos = ",showDzn(pos),";\n","neg = ",showDzn(neg),";\n"];
+array [1..1] of bool: neg;
+array [1..2] of bool: pos;
