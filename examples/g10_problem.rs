@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ozn_path = Path::new(".\\minizinc").join(MODEL.to_string() + ".ozn");
 
     let swarm_size: i64 = 100;
-    let max_iteration: i64 = 500;
+    let max_iteration: i64 = 1000;
     let w: f64 = 0.669;
     let c1: f64 = 2.385;
     let c2: f64 = 0.558;

@@ -22,15 +22,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let x = solution;
         let n = N as f64;
 
-        let sum_cos4: f64 = x.iter().map(|&xi| xi.cos().powf(4.0)).sum();
-        let prod_cos2: f64 = x.iter().map(|&xi| xi.cos().powf(2.0)).product();
+        let mut cos2 = vec![0.0; N];
+        let mut sum_cos4 = 0.0;
+        let mut weighted_sum_sq: f64 = 0.0;
+
+       for (i, &xi) in x.iter().enumerate() {
+            let cos_x = xi.cos();
+            cos2[i] = cos_x.powf(2.0);
+            sum_cos4 += cos_x.powf(4.0);
+            weighted_sum_sq += (i as f64 + 1.0) * xi.powf(2.0);
+        }
+
+        let prod_cos2: f64 = cos2.iter().copied().product();
+        let mut denominator = weighted_sum_sq.sqrt();
+        if denominator < 1e-6 {
+            denominator = 1e-6;
+        }
+
         let numerator = sum_cos4 - 2.0 * prod_cos2;
-        let denominator = (x.iter().enumerate().map(|(i, &xi)| (i as f64 + 1.0) * xi.powf(2.0)).sum::<f64>()).sqrt();
-        let objective = -((numerator.abs()) / denominator);
+        let objective = -((numerator / denominator).abs());
 
+        let prod_x: f64 = x.iter().copied().product();
+        let sum_x: f64 = x.iter().copied().sum();
 
-        let g1 = 0.75 - x.iter().product::<f64>();
-        let g2 = x.iter().sum::<f64>() - 7.5 * n;
+        let g1 = 0.75 - prod_x;
+        let g2 = sum_x - 7.5 * n;
 
         let violation = g1.max(0.0) + g2.max(0.0);
 
