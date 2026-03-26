@@ -48,6 +48,13 @@ impl IntFunctionalEvaluator {
         }
     }
 
+    /// Returns a functional evaluator for the `array_int_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn array_int_element(
         &self,
         constraint: &CallWithDefines,
@@ -101,6 +108,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_abs` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_abs(
         &self,
         constraint: &CallWithDefines,
@@ -176,6 +190,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_div` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_div(
         &self,
         constraint: &CallWithDefines,
@@ -281,6 +302,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_eq` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_eq(
         &self,
         constraint: &CallWithDefines,
@@ -357,6 +385,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_eq_reif` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_eq_reif(
         &self,
         constraint: &CallWithDefines,
