@@ -3483,21 +3483,6 @@ impl FloatFunctionalEvaluator {
     }
 
     #[inline]
-    fn float_abs_diff(&self, a: f64, b: f64) -> f64 {
-        (a - b).abs()
-    }
-
-    #[inline]
-    fn float_eq_tol(&self, a: f64, b: f64) -> bool {
-        self.float_abs_diff(a, b) <= FLOAT_EQ_TOLERANCE
-    }
-
-    #[inline]
-    fn float_eq_violation(&self, a: f64, b: f64) -> f64 {
-        (self.float_abs_diff(a, b) - FLOAT_EQ_TOLERANCE).max(0.0)
-    }
-
-    #[inline]
     fn identifier_from_vars(&self, vars: &HashMap<i64, Identifier>, index: usize) -> Option<String> {
         vars.get(&(index as i64)).map(|id| id.to_string())
     }

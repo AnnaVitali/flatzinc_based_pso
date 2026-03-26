@@ -109,6 +109,7 @@ impl OznParser {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum OznMapping {
     Scalar { source: String },
     Array { source: String },

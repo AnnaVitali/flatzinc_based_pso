@@ -1,5 +1,3 @@
-use std::process::exit;
-
 #[derive(Clone)]
 pub struct SolutionNormalizer {
     bounds: Vec<(f64, f64)>,

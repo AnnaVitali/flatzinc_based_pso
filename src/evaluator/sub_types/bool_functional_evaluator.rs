@@ -2,9 +2,9 @@ use crate::args_extractor::sub_types::bool_args_extractor::BoolArgsExtractor;
 use crate::data_utility::logger::write_verbose_output;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Call, Identifier};
+use flatzinc_serde::{Array, Identifier};
 use log::info;
-use std::{backtrace, collections::HashMap};
+use std::collections::HashMap;
 
 pub const A_TERM_INDEX: usize = 0;
 pub const B_TERM_INDEX: usize = 1;
@@ -30,26 +30,6 @@ impl BoolFunctionalEvaluator {
             args_extractor,
             verbose,
         }
-    }
-
-    fn prepare_env(&self, constraint: &CallWithDefines) -> (BoolArgsExtractor, Call, bool) {
-        (
-            self.args_extractor.clone(),
-            constraint.call.clone(),
-            self.verbose,
-        )
-    }
-
-    fn prepare_env_with_arrays(
-        &self,
-        constraint: &CallWithDefines,
-    ) -> (BoolArgsExtractor, HashMap<Identifier, Array>, Call, bool) {
-        (
-            self.args_extractor.clone(),
-            self.arrays.clone(),
-            constraint.call.clone(),
-            self.verbose,
-        )
     }
 
     pub fn array_bool_and(
@@ -180,7 +160,6 @@ impl BoolFunctionalEvaluator {
     pub fn array_bool_xor(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
@@ -327,7 +306,6 @@ impl BoolFunctionalEvaluator {
     pub fn bool_clause(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
@@ -1520,26 +1498,6 @@ impl BoolFunctionalEvaluator {
 
             violation
         })
-    }
-
-    fn int_lin_left_term(
-        &self,
-        coeff: &[i64],
-        bs_array: &[bool],
-        verbose_terms: &mut String,
-    ) -> i64 {
-        let left_side_term: i64 = coeff
-            .iter()
-            .zip(bs_array.iter())
-            .map(|(c, b)| {
-                let val = if *b { 1_i64 } else { 0_i64 };
-                if self.verbose {
-                    write_verbose_output(verbose_terms, c, &val);
-                }
-                c * val
-            })
-            .sum();
-        left_side_term
     }
 
     fn identifier_from_vars(

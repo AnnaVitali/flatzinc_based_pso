@@ -1,26 +1,23 @@
-use crate::args_extractor::args_extractor::ArgsExtractor;
-use crate::data_utility::constraint_evaluation::ConstraintEvaluation;
-use crate::evaluator::mini_evaluator::CallWithDefines;
 use flatzinc_serde::{Array, Identifier, Literal};
-use petgraph::Directed;
-use petgraph::algo::toposort;
 use petgraph::graph::{Graph, NodeIndex};
-use std::collections::{HashMap, HashSet, VecDeque};
+use petgraph::algo::toposort;
+use petgraph::Directed;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use crate::args_extractor::args_extractor::ArgsExtractor;
+use crate::evaluator::mini_evaluator::CallWithDefines;
 
 #[derive(Clone, Debug, Default)]
 pub struct InvariantGraph {
     graph: Graph<(), i32, Directed>,
-    arrays: HashMap<Identifier, Array>,
-    index_map: HashMap<NodeIndex, usize>,
-    constraint_to_node: HashMap<usize, NodeIndex>,
-    variables_map: HashMap<String, NodeIndex>,
-    evaluations: HashMap<NodeIndex, ConstraintEvaluation>,
+    index_map: HashMap<NodeIndex, usize>,            
+    variables_map: HashMap<String, NodeIndex>,      
     constraints: Vec<CallWithDefines>,
 }
 
 impl InvariantGraph {
-    pub fn build(constraints: &[CallWithDefines], arrays: &HashMap<Identifier, Array>) -> Self {
+
+    pub fn build(constraints: &[CallWithDefines], arrays: &HashMap<Identifier, Array>, save:bool) -> Self {
         let mut graph = Graph::<(), i32, Directed>::new();
         let mut constraint_nodes: Vec<NodeIndex> = Vec::with_capacity(constraints.len());
         let mut variables_map: HashMap<String, NodeIndex> = HashMap::new();
@@ -28,8 +25,7 @@ impl InvariantGraph {
         let mut constraint_to_node: HashMap<usize, NodeIndex> = HashMap::new();
         let extractor = ArgsExtractor::new();
 
-        let mut argument_variable_ids_per_constraint: Vec<Vec<String>> =
-            Vec::with_capacity(constraints.len());
+        let mut argument_variable_ids_per_constraint: Vec<Vec<String>> = Vec::with_capacity(constraints.len());
 
         //Create nodes
         for (constraint_index, constraint) in constraints.iter().enumerate() {
@@ -38,34 +34,27 @@ impl InvariantGraph {
             index_map.insert(constraint_node_index, constraint_index);
             constraint_to_node.insert(constraint.id, constraint_node_index);
 
-            let argument_variable_ids =
-                extractor.extract_literal_identifiers(&constraint.call.args);
+            let argument_variable_ids = extractor.extract_literal_identifiers(&constraint.call.args);
 
             if let Some(defined_var) = &constraint.defines {
-                variables_map
-                    .entry(defined_var.clone())
-                    .or_insert_with(|| graph.add_node(()));
+                variables_map.entry(defined_var.clone()).or_insert_with(|| graph.add_node(()));
             }
             for arg_var in &argument_variable_ids {
                 let identifier = Identifier::from(arg_var.as_str());
-
+                
                 //Create nodes for its contents instead of the array itself
                 if let Some(array) = arrays.get(&identifier) {
                     for arg in &array.contents {
                         if let Literal::Identifier(id) = arg {
-                            variables_map
-                                .entry(id.to_string())
-                                .or_insert_with(|| graph.add_node(()));
+                            variables_map.entry(id.to_string()).or_insert_with(|| graph.add_node(()));
                         }
                     }
                 } else {
                     //If not an array, create node for this variable
-                    variables_map
-                        .entry(arg_var.clone())
-                        .or_insert_with(|| graph.add_node(()));
+                    variables_map.entry(arg_var.clone()).or_insert_with(|| graph.add_node(()));
                 }
             }
-
+            
             argument_variable_ids_per_constraint.push(argument_variable_ids);
         }
 
@@ -76,7 +65,7 @@ impl InvariantGraph {
 
             for variable_name in &argument_variable_ids_per_constraint[constraint_index] {
                 let identifier = Identifier::from(variable_name.as_str());
-
+                
                 // If this is an array, create edges to its contents
                 if let Some(array) = arrays.get(&identifier) {
                     for arg in &array.contents {
@@ -85,9 +74,7 @@ impl InvariantGraph {
                                 continue;
                             }
                             if let Some(&variable_node_index) = variables_map.get(&id.to_string()) {
-                                if variable_node_index != constraint_node_index
-                                    && seen_input_nodes.insert(variable_node_index)
-                                {
+                                if variable_node_index != constraint_node_index && seen_input_nodes.insert(variable_node_index) {
                                     graph.add_edge(variable_node_index, constraint_node_index, 1);
                                 }
                             }
@@ -96,9 +83,7 @@ impl InvariantGraph {
                 } else {
                     // Not an array, create edge normally
                     if let Some(&variable_node_index) = variables_map.get(variable_name) {
-                        if variable_node_index != constraint_node_index
-                            && seen_input_nodes.insert(variable_node_index)
-                        {
+                        if variable_node_index != constraint_node_index && seen_input_nodes.insert(variable_node_index) {
                             if constraint.defines.as_deref() == Some(variable_name.as_str()) {
                                 continue;
                             }
@@ -118,148 +103,21 @@ impl InvariantGraph {
 
         let invariant_graph = Self {
             graph,
-            arrays: arrays.clone(),
             index_map,
-            constraint_to_node,
             variables_map,
-            evaluations: HashMap::new(),
             constraints: constraints.to_vec(),
         };
+
+        if save {
+            invariant_graph.export_dot("invariant_graph.dot");
+        }
 
         invariant_graph
     }
 
-    pub fn topologically_sorted_constraints(
-        &self,
-        constraints: &[CallWithDefines],
-    ) -> Vec<CallWithDefines> {
+    pub fn topologically_sorted_constraints(&self, constraints: &[CallWithDefines]) -> Vec<CallWithDefines> {
         let indices = self.topologically_sort_constraints_indices();
         indices.iter().map(|&i| constraints[i].clone()).collect()
-    }
-
-    pub fn attach_evaluation_by_constraint_index(
-        &mut self,
-        constraint_idx: usize,
-        evaluation: ConstraintEvaluation,
-    ) {
-        self.evaluations.remove(
-            self.constraint_to_node
-                .get(&constraint_idx)
-                .unwrap_or_else(|| panic!("No node found for constraint index {}", constraint_idx)),
-        );
-        if let Some(&constraint_node_index) = self.constraint_to_node.get(&constraint_idx) {
-            self.evaluations.insert(constraint_node_index, evaluation);
-        }
-    }
-
-    pub fn get_current_evaluation_nodes(&self) -> Vec<ConstraintEvaluation> {
-        let mut out: Vec<ConstraintEvaluation> = Vec::with_capacity(self.evaluations.len());
-        for (_, eval) in &self.evaluations {
-            out.push(eval.clone());
-        }
-        out
-    }
-
-    pub fn detach_evaluation_nodes(&mut self) {
-        self.evaluations.clear();
-    }
-
-    pub fn get_variable_related_constraint_evaluation_nodes(
-        &self,
-        var_name: &str,
-    ) -> Vec<ConstraintEvaluation> {
-        use std::collections::{HashSet, VecDeque};
-        let mut result = Vec::new();
-        let mut visited_vars = HashSet::new();
-        let mut queue = VecDeque::new();
-
-        if let Some(&start_var_node) = self.variables_map.get(var_name) {
-            queue.push_back(start_var_node);
-            visited_vars.insert(start_var_node);
-        } else {
-            return Vec::new();
-        }
-
-        while let Some(var_node) = queue.pop_front() {
-            for constraint_node in self
-                .graph
-                .neighbors_directed(var_node, petgraph::Direction::Outgoing)
-            {
-                if let Some(eval) = self.evaluations.get(&constraint_node) {
-                    result.push(eval.clone());
-                }
-                if let Some(&constraint_idx) = self.index_map.get(&constraint_node) {
-                    if let Some(constraint) = self.constraints.get(constraint_idx) {
-                        if let Some(defined_var) = &constraint.defines {
-                            if let Some(&defined_var_node) = self.variables_map.get(defined_var) {
-                                if !visited_vars.contains(&defined_var_node) {
-                                    queue.push_back(defined_var_node);
-                                    visited_vars.insert(defined_var_node);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        result
-    }
-
-    pub fn get_variables_involved_in_constraint(
-        &self,
-        constraint: &CallWithDefines,
-    ) -> Vec<String> {
-        self.constraint_to_node
-            .get(&constraint.id)
-            .map(|&node| self.variables_linked_to_constraint(node))
-            .unwrap_or_default()
-    }
-
-    pub fn get_variable_involved_in_constraint_through_constraint_index(
-        &self,
-        constraint_idx: usize,
-    ) -> Vec<String> {
-        self.constraint_to_node
-            .get(&constraint_idx)
-            .map(|&node| self.variables_linked_to_constraint(node))
-            .unwrap_or_default()
-    }
-
-    pub fn get_root_variables(&self, var_name: &str) -> Vec<String> {
-        let mut result: HashSet<String> = HashSet::new();
-        let mut visited: HashSet<String> = HashSet::new();
-        let mut stack: VecDeque<String> = VecDeque::new();
-
-        stack.push_back(var_name.to_string());
-
-        while let Some(current_var) = stack.pop_back() {
-            if !visited.insert(current_var.clone()) {
-                continue;
-            }
-            if let Some(constraint) = self.get_defining_constraint(&current_var) {
-                let input_vars = self.get_variables_involved_in_constraint(&constraint);
-
-                for var in input_vars {
-                    // Avoid self-loop
-                    if var != current_var {
-                        stack.push_back(var);
-                    }
-                }
-            } else {
-                result.insert(current_var);
-            }
-        }
-
-        let mut out: Vec<String> = result.into_iter().collect();
-        out.sort();
-        out
-    }
-
-    pub fn get_defining_constraint(&self, var_name: &str) -> Option<CallWithDefines> {
-        self.constraints
-            .iter()
-            .find(|c| c.defines.as_deref() == Some(var_name))
-            .cloned()
     }
 
     pub fn export_dot(&self, file_path: &str) {
@@ -286,20 +144,14 @@ impl InvariantGraph {
 
         match fs::write(file_path, dot) {
             Ok(_) => eprintln!("[InvariantGraph] Graph saved to {}", file_path),
-            Err(err) => eprintln!(
-                "[InvariantGraph] Failed to save graph to {}: {}",
-                file_path, err
-            ),
+            Err(err) => eprintln!("[InvariantGraph] Failed to save graph to {}: {}", file_path, err),
         }
     }
 
-    fn node_label(&self, node: NodeIndex) -> String {
+     fn node_label(&self, node: NodeIndex) -> String {
         if let Some(&constraint_idx) = self.index_map.get(&node) {
             if let Some(constraint) = self.constraints.get(constraint_idx) {
-                return format!(
-                    "constraint(id={}, call={})",
-                    constraint.id, constraint.call.id
-                );
+                return format!("constraint(id={}, call={})", constraint.id, constraint.call.id);
             }
             return format!("constraint(index={})", constraint_idx);
         }
@@ -321,26 +173,4 @@ impl InvariantGraph {
             .collect()
     }
 
-    fn variables_linked_to_constraint(&self, constraint_node: NodeIndex) -> Vec<String> {
-        let mut neighbor_indices: HashSet<NodeIndex> = HashSet::new();
-        neighbor_indices.extend(
-            self.graph
-                .neighbors_directed(constraint_node, petgraph::Direction::Incoming),
-        );
-        neighbor_indices.extend(
-            self.graph
-                .neighbors_directed(constraint_node, petgraph::Direction::Outgoing),
-        );
-
-        self.variables_map
-            .iter()
-            .filter_map(|(var_name, &var_node_idx)| {
-                if neighbor_indices.contains(&var_node_idx) {
-                    Some(var_name.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
 }

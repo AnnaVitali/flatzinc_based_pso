@@ -102,14 +102,12 @@ impl PSOParticle {
     pub fn random_initialize_position_and_velocity(&mut self) {
         self.position.clear();
         self.velocity.clear();
-        let mut id = 1;
+
         for _ in &self.variable_bounds {
             let x = self.rng.random_range(0.0..1.0);
             let vel = self.rng.random_range(-0.1..0.1);
             self.position.push(x);
             self.velocity.push(vel);
-
-            id += 1;
         }
 
         let denormalized_position = self.normalizer.denormalize(&self.position);

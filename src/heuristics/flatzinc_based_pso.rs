@@ -1,7 +1,7 @@
 use crate::data_utility::minizinc_solution_normalizer::MiniZincSolutionNormalizer;
 use crate::evaluator::mini_evaluator::MiniEvaluator;
 use crate::solution_provider::{SolutionProvider, VariableValue};
-use flatzinc_serde::{Domain, FlatZinc, Identifier, Type, Variable};
+use flatzinc_serde::{Domain, FlatZinc, Type, Variable};
 use rand::RngExt;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
@@ -183,13 +183,11 @@ impl FlatzincBasedParticle {
             }
         }
 
-        let mut id = 1;
         for _ in &self.variable_bounds {
             let x = self.rng.random_range(0.0..1.0);
             let vel = self.rng.random_range(-0.1..0.1);
             self.position.push(x);
             self.velocity.push(vel);
-            id += 1;
         }
 
         self.normalizer = MiniZincSolutionNormalizer::new(self.variable_bounds.clone());

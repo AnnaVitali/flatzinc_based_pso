@@ -4,7 +4,7 @@ use crate::evaluator::sub_types::set_functional_evaluator::{
     ARRAY_INDEX, X_TERM_INDEX, Y_TERM_INDEX,
 };
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Call, Identifier};
+use flatzinc_serde::{Array, Identifier};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]

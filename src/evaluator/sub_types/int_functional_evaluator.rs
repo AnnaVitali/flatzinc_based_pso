@@ -1510,7 +1510,7 @@ impl IntFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: int_ne {} != {}", a_display, b_display);
+                    info!("Violated constraint: int_ne_reif {} <-> {} != {}", r_display, a_display, b_display);
                 }
                 violation = 1.0;
             }

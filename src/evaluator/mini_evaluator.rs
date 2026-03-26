@@ -56,7 +56,7 @@ impl MiniEvaluator {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        let graph = InvariantGraph::build(&constraints, &arrays_hashmap);
+        let graph = InvariantGraph::build(&constraints, &arrays_hashmap, false);
         constraints = graph.topologically_sorted_constraints(&constraints);
 
         let mut verbose = false;
@@ -411,7 +411,7 @@ impl MiniEvaluator {
                     ),
                     "array_bool_xor" => Arc::from(
                         self.bool_functional_evaluator
-                            .array_bool_xor(constraint, &self.solution),
+                            .array_bool_xor(constraint),
                     ),
                     "bool_and" => Arc::from(
                         self.bool_functional_evaluator
@@ -419,7 +419,7 @@ impl MiniEvaluator {
                     ),
                     "bool_clause" => Arc::from(
                         self.bool_functional_evaluator
-                            .bool_clause(constraint, &self.solution),
+                            .bool_clause(constraint),
                     ),
                     "bool_eq" => Arc::from(
                         self.bool_functional_evaluator
