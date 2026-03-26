@@ -6,12 +6,11 @@ use crate::invariant_graph::InvariantGraph;
 use crate::solution_provider::{SolutionProvider, VariableValue};
 use crate::variable_assigner::variable_assigner::VariableAssigner;
 use env_logger::Env;
-use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type, Variable};
+use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
-use std::hash::RandomState;
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
@@ -577,13 +576,13 @@ impl MiniEvaluator {
                 let objective_id: &str = match objective_lit {
                     Literal::Identifier(id) => id.as_str(),
                     Literal::String(id) => id.as_str(),
-                    _ => panic!("Objective literal must be an identifier or string"),
+                    _ => log::error!("Objective literal must be an identifier or string"),
                 };
                 if let Some(obj_val) = self.solution.get(objective_id) {
                     match obj_val {
                         VariableValue::Int(val) => objective = Some(*val as f64),
                         VariableValue::Float(val) => objective = Some(*val),
-                        _ => panic!("Objective variable must be numeric"),
+                        _ => log::error!("Objective variable must be numeric"),
                     }
                 }
             }
@@ -605,13 +604,13 @@ impl MiniEvaluator {
         if let Some(objective_lit) = self.fzn.solve.objective.as_ref() {
             let objective_id: &str = match objective_lit {
                 Literal::Identifier(id) => id.as_str(),
-                _ => panic!("Objective must be an identifier or string"),
+                _ => log::error!("Objective must be an identifier or string"),
             };
             if let Some(obj_val) = self.solution.get(objective_id) {
                 match obj_val {
                     VariableValue::Int(val) => objective = Some(*val as f64),
                     VariableValue::Float(val) => objective = Some(*val),
-                    _ => panic!("Objective variable must be numeric"),
+                    _ => log::error!("Objective variable must be numeric"),
                 }
             }
         }
@@ -702,7 +701,7 @@ impl MiniEvaluator {
                                 }
                             }
                         }
-                        _ => panic!(
+                        _ => log::error!(
                             "Mismatched variable and bounds types for variable `{}`",
                             var_id
                         ),
@@ -726,7 +725,10 @@ impl MiniEvaluator {
                         if variable.defined || (variable.introduced && variable.defined) {
                             continue;
                         } else {
-                            panic!("No domain for int variable `{}`", identifier);
+                            if self.verbose {
+                                log::warn!("Int variable `{}` is unbounded", identifier);
+                            }
+                            continue;
                         }
                     } else {
                         match domain.unwrap() {
@@ -738,7 +740,7 @@ impl MiniEvaluator {
                                     (VariableValue::Int(min_v), VariableValue::Int(max_v)),
                                 );
                             }
-                            _ => panic!("Non-integer domain for int variable `{}`", identifier),
+                            _ => log::error!("Non-integer domain for int variable `{}`", identifier),
                         };
                     }
                 }
@@ -752,7 +754,10 @@ impl MiniEvaluator {
                         if variable.defined || (variable.introduced && variable.defined) {
                             continue;
                         } else {
-                            panic!("No domain for float variable `{}`", identifier);
+                            if self.verbose {
+                                log::warn!("Float variable `{}` is unbounded", identifier);
+                            }
+                            continue;
                         }
                     } else {
                         match domain.unwrap() {
@@ -764,7 +769,7 @@ impl MiniEvaluator {
                                     (VariableValue::Float(min_v), VariableValue::Float(max_v)),
                                 );
                             }
-                            _ => panic!("Non-floating domain for float variable `{}`", identifier),
+                            _ => log::error!("Non-floating domain for float variable `{}`", identifier),
                         };
                     }
                 }

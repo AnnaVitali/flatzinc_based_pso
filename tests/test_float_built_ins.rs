@@ -50,7 +50,7 @@ pub(crate) fn test_array_float_element() -> Result<(), Box<dyn Error>> {
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
-    c = 20.0;
+    c = 3.0;
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_float("c".to_string(), c);
 
@@ -97,7 +97,7 @@ pub(crate) fn test_array_var_float_element() -> Result<(), Box<dyn Error>> {
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
-    c = 20.0;
+    c = 3.0;
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_float("c".to_string(), c);
     solution_provider.provide_array_of_float("as".to_string(), as_array.clone());
