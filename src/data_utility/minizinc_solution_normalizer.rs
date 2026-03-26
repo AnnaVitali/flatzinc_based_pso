@@ -2,16 +2,32 @@ use std::collections::HashMap;
 
 use crate::solution_provider::VariableValue;
 
+/// A utility for normalizing and denormalizing MiniZinc solutions based on variable bounds.
+///
+/// This struct stores the lower and upper bounds for each variable and provides methods to
+/// normalize a solution (mapping variable values to [0, 1]) and denormalize (mapping normalized values back to the original scale).
 #[derive(Clone)]
 pub struct MiniZincSolutionNormalizer {
+    /// A map from variable names to their (min, max) bounds as `VariableValue` pairs.
     bounds: HashMap<String, (VariableValue, VariableValue)>,
 }
 
 impl MiniZincSolutionNormalizer {
+    /// Creates a new `MiniZincSolutionNormalizer` with the provided bounds.
+    ///
+    /// # Arguments
+    /// * `bounds` - A map from variable names to their (min, max) bounds.
     pub fn new(bounds: HashMap<String, (VariableValue, VariableValue)>) -> Self {
         MiniZincSolutionNormalizer { bounds }
     }
 
+    /// Normalizes a solution using the stored bounds, mapping each variable value to the [0, 1] range.
+    ///
+    /// # Arguments
+    /// * `solution` - A map from variable names to their values.
+    ///
+    /// # Returns
+    /// A map from variable names to their normalized values as `f64` in [0, 1].
     pub fn normalize(&self, solution: &HashMap<String, VariableValue>) -> HashMap<String, f64> {
         let mut normalized_solution = HashMap::new();
         for (var_name, var_value) in solution.iter() {
@@ -45,6 +61,13 @@ impl MiniZincSolutionNormalizer {
         normalized_solution
     }
 
+    /// Denormalizes a solution from the [0, 1] range back to the original variable scale using the stored bounds.
+    ///
+    /// # Arguments
+    /// * `normalized_solution` - A map from variable names to their normalized values as `f64` in [0, 1].
+    ///
+    /// # Returns
+    /// A map from variable names to their denormalized `VariableValue`.
     pub fn denormalize(
         &self,
         normalized_solution: &HashMap<String, f64>,
@@ -80,6 +103,7 @@ impl MiniZincSolutionNormalizer {
         denormalized_solution
     }
 
+    /// Creates a default `MiniZincSolutionNormalizer` with no bounds set.
     pub fn default() -> MiniZincSolutionNormalizer {
         MiniZincSolutionNormalizer {
             bounds: HashMap::new(),

@@ -6,7 +6,7 @@ use crate::invariant_graph::InvariantGraph;
 use crate::solution_provider::{SolutionProvider, VariableValue};
 use crate::variable_assigner::variable_assigner::VariableAssigner;
 use env_logger::Env;
-use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type, Variable};
+use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
@@ -621,7 +621,7 @@ impl MiniEvaluator {
     fn evaluate_domain_constraints(&mut self) -> f64 {
         let mut violation = 0.0;
 
-        for (var_id, var) in &self.fzn.variables {
+        for (var_id, _var) in &self.fzn.variables {
             if let Some((lower_bound, upper_bound)) = self.variable_bounds.get(var_id) {
                 if let Some(value) = self.solution.get(var_id) {
                     match (value, lower_bound, upper_bound) {

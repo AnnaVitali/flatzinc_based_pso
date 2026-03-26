@@ -1,10 +1,6 @@
-// rust
-// edit: examples/flatzinc_based_pso_test.rs
 use std::env;
 use std::path::Path;
-use std::sync::Arc;
 use constraint_evaluator::heuristics::flatzinc_based_pso::FlatzincBasedPSO;
-use constraint_evaluator::heuristics::pso::PSO;
 
 const MODEL: &str = "g01";
 

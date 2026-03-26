@@ -4,25 +4,53 @@ use flatzinc_serde::{Argument, Array, Call, Identifier, Literal};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
+/// A helper struct for extracting float arguments from constraints, 
+/// utilizing an internal `ArgsExtractor` for common extraction logic.
 pub struct FloatArgsExtractor {
     args_extractor: ArgsExtractor,
 }
 
+/// This struct provides methods to extract float values, arrays of floats, and related information from constraint arguments, 
+/// handling both literals and identifiers that reference variables or arrays in the solution.
 impl FloatArgsExtractor {
+    /// Creates a new `FloatArgsExtractor` with an internal `ArgsExtractor`.
     pub fn new() -> Self {
         let args_extractor = ArgsExtractor::new();
         Self { args_extractor }
     }
 
+    /// Extracts a mapping from indices to literal identifiers from the given arguments.
+    ///
+    /// # Arguments
+    /// * `args` - A slice of `Argument` to extract identifiers from.
+    ///
+    /// # Returns
+    /// A `HashMap` mapping indices to identifier names.
     pub fn extract_literal_identifier_with_index(&self, args: &[Argument]) -> HashMap<i64, String> {
         self.args_extractor
             .extract_literal_identifiers_with_index(args)
     }
 
+    /// Extracts all literal identifiers from the given arguments.
+    ///
+    /// # Arguments
+    /// * `args` - A slice of `Argument` to extract identifiers from.
+    ///
+    /// # Returns
+    /// A vector of identifier names as `String`.
     pub fn extract_literal_identifiers(&self, args: &[Argument]) -> Vec<String> {
         self.args_extractor.extract_literal_identifiers(args)
     }
 
+    /// Extracts a float value from an array element in the constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted float value from the array element.
     pub fn extract_float_element_in_array(
         &self,
         constraint: &Call,
@@ -51,6 +79,15 @@ impl FloatArgsExtractor {
         }
     }
 
+    /// Extracts a float value from the constraint at the specified argument index.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted float value.
     pub fn extract_float_value(
         &self,
         index: usize,
@@ -70,6 +107,15 @@ impl FloatArgsExtractor {
         }
     }
 
+    /// Extracts a boolean value from the constraint at the specified argument index.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted boolean value.
     pub fn extract_bool_value(
         &self,
         index: usize,
@@ -82,6 +128,15 @@ impl FloatArgsExtractor {
         )
     }
 
+    /// Extracts an integer value from the constraint at the specified argument index.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted integer value.
     pub fn extract_int_value(
         &self,
         index: usize,
@@ -94,6 +149,15 @@ impl FloatArgsExtractor {
         )
     }
 
+    /// Extracts float coefficients from a linear expression in the constraint.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    ///
+    /// # Returns
+    /// A vector of float coefficients from the linear expression.
     pub fn extract_float_coefficients_lin_expr(
         &self,
         index: usize,
@@ -132,6 +196,15 @@ impl FloatArgsExtractor {
         coeff
     }
 
+    /// Extracts variable identifiers from a linear expression in the constraint.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    ///
+    /// # Returns
+    /// A vector of variable identifiers from the linear expression.
     pub fn extract_var_values_lin_expr(
         &self,
         index: usize,

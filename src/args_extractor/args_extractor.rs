@@ -6,13 +6,26 @@ pub const ARRAY_IDX_INDEX: usize = 0;
 pub const TERM_INDEX: usize = 2;
 
 #[derive(Debug, Clone, Default)]
+/// A helper struct for extracting arguments from constraints, 
+/// providing common methods for handling literals, identifiers, and arrays in the context of constraint evaluation.
 pub struct ArgsExtractor {}
 
+/// This struct provides methods to extract various types of arguments from constraints,
+/// including integer values, boolean values, variable identifiers, and array elements,
+/// handling both literals and identifiers that reference variables or arrays in the solution.
 impl ArgsExtractor {
+    /// Creates a new `ArgsExtractor`.
     pub fn new() -> Self {
         Self {}
     }
 
+    /// Extracts a mapping from indices to literal identifiers from the given arguments.
+    ///
+    /// # Arguments
+    /// * `args` - A slice of `Argument` to extract identifiers from.
+    ///
+    /// # Returns
+    /// A `HashMap` mapping indices to identifier names.
     pub fn extract_literal_identifiers_with_index(
         &self,
         args: &[Argument],
@@ -51,6 +64,13 @@ impl ArgsExtractor {
         ids
     }
 
+    /// Extracts all literal identifiers from the given arguments.
+    ///
+    /// # Arguments
+    /// * `args` - A slice of `Argument` to extract identifiers from.
+    ///
+    /// # Returns
+    /// A vector of identifier names as `String`.
     pub fn extract_literal_identifiers(&self, args: &[Argument]) -> Vec<String> {
         let mut ids = Vec::with_capacity(args.len());
 
@@ -83,6 +103,15 @@ impl ArgsExtractor {
         ids
     }
 
+    /// Extracts variable identifiers from a linear expression in the constraint.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    ///
+    /// # Returns
+    /// A vector of variable identifiers from the linear expression.
     pub fn extract_var_values_lin_expr(
         &self,
         index: usize,
@@ -119,7 +148,6 @@ impl ArgsExtractor {
                             vec![id.clone()]
                         }
                     }
-                    //Literal::String(s) => vec![s.clone()],
                     _ => Vec::new(),
                 },
             })
@@ -127,6 +155,15 @@ impl ArgsExtractor {
         vars_involved
     }
 
+    /// Extracts an integer value from an array element in the constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted integer value from the array element.
     pub fn extract_int_array_element(
         &self,
         constraint: &Call,
@@ -153,6 +190,15 @@ impl ArgsExtractor {
         }
     }
 
+    /// Extracts integer coefficients from a linear expression in the constraint.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the argument in the constraint.
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    ///
+    /// # Returns
+    /// A vector of integer coefficients from the linear expression.
     pub fn extract_int_coefficients_lin_expr(
         &self,
         index: usize,
@@ -191,6 +237,13 @@ impl ArgsExtractor {
         coeff
     }
 
+    /// Extracts the integer constant term from a linear expression in the constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call containing the linear expression.
+    ///
+    /// # Returns
+    /// The integer constant term from the linear expression.
     pub fn extract_int_constant_term_lin_expr(&self, constraint: &Call) -> i64 {
         constraint
             .args
@@ -205,6 +258,14 @@ impl ArgsExtractor {
             .unwrap_or_default()
     }
 
+    /// Extracts an integer value from a literal or identifier.
+    ///
+    /// # Arguments
+    /// * `literal` - The literal or identifier to extract the value from.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted integer value.
     pub fn extract_int_value(
         &self,
         literal: Literal,
@@ -221,6 +282,14 @@ impl ArgsExtractor {
         }
     }
 
+    /// Extracts a boolean value from a literal or identifier.
+    ///
+    /// # Arguments
+    /// * `literal` - The literal or identifier to extract the value from.
+    /// * `solution` - The solution map for resolving identifiers.
+    ///
+    /// # Returns
+    /// The extracted boolean value.
     pub fn extract_bool_value(
         &self,
         literal: Literal,
@@ -237,6 +306,14 @@ impl ArgsExtractor {
         }
     }
 
+    /// Extracts a literal term from the constraint at the specified argument index.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `index` - The index of the argument in the constraint.
+    ///
+    /// # Returns
+    /// The extracted `Literal` term.
     pub fn extract_term(&self, constraint: &Call, index: usize) -> Literal {
         let arg = constraint
             .args
@@ -249,6 +326,14 @@ impl ArgsExtractor {
         }
     }
 
+    /// Extracts an array from the constraint using the identifier at argument index 1.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call containing the argument.
+    /// * `arrays` - A map of identifiers to arrays for resolving array references.
+    ///
+    /// # Returns
+    /// A reference to the extracted `Array`.
     pub fn extract_array<'a>(
         &self,
         constraint: &Call,
