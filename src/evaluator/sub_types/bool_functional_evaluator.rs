@@ -1,8 +1,8 @@
 use crate::args_extractor::sub_types::bool_args_extractor::BoolArgsExtractor;
 use crate::data_utility::logger::write_verbose_output;
-use crate::evaluator::evaluator::CallWithDefines;
+use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier, Call};
+use flatzinc_serde::{Array, Call, Identifier};
 use log::info;
 use std::{backtrace, collections::HashMap};
 
@@ -33,11 +33,23 @@ impl BoolFunctionalEvaluator {
     }
 
     fn prepare_env(&self, constraint: &CallWithDefines) -> (BoolArgsExtractor, Call, bool) {
-        (self.args_extractor.clone(), constraint.call.clone(), self.verbose)
+        (
+            self.args_extractor.clone(),
+            constraint.call.clone(),
+            self.verbose,
+        )
     }
 
-    fn prepare_env_with_arrays(&self, constraint: &CallWithDefines) -> (BoolArgsExtractor, HashMap<Identifier, Array>, Call, bool) {
-        (self.args_extractor.clone(), self.arrays.clone(), constraint.call.clone(), self.verbose)
+    fn prepare_env_with_arrays(
+        &self,
+        constraint: &CallWithDefines,
+    ) -> (BoolArgsExtractor, HashMap<Identifier, Array>, Call, bool) {
+        (
+            self.args_extractor.clone(),
+            self.arrays.clone(),
+            constraint.call.clone(),
+            self.verbose,
+        )
     }
 
     pub fn array_bool_and(
@@ -49,20 +61,25 @@ impl BoolFunctionalEvaluator {
         let arrays = self.arrays.clone();
         let call = constraint.call.clone();
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&call.args);
 
         let r_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &call, solution),
+            )
         } else {
             None
         };
 
-
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-            let as_array = args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
+            let as_array =
+                args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
             let r_value = if let Some(rv) = r_const {
                 rv
             } else {
@@ -108,7 +125,10 @@ impl BoolFunctionalEvaluator {
 
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
         let c_value: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(C_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
@@ -116,7 +136,8 @@ impl BoolFunctionalEvaluator {
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-            let array_value = args_extractor.extract_bool_element_array(AS_ARRAY_INDEX, &call, &arrays, solution);
+            let array_value =
+                args_extractor.extract_bool_element_array(AS_ARRAY_INDEX, &call, &arrays, solution);
             let c_value = if let Some(cv) = c_value {
                 cv
             } else {
@@ -134,13 +155,20 @@ impl BoolFunctionalEvaluator {
 
             if array_value != c_value {
                 if verbose {
-                    let array_display = if array_value { "true".to_string() } else { "false".to_string() };
+                    let array_display = if array_value {
+                        "true".to_string()
+                    } else {
+                        "false".to_string()
+                    };
                     let value_display = if c_key.is_none() {
                         c_value.to_string()
                     } else {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: array_bool_element {} = {}", array_display, value_display);
+                    info!(
+                        "Violated constraint: array_bool_element {} = {}",
+                        array_display, value_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -162,7 +190,8 @@ impl BoolFunctionalEvaluator {
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-            let array_value = args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
+            let array_value =
+                args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
 
             if !array_value.iter().fold(false, |acc, &item| acc ^ item) {
                 if verbose {
@@ -186,23 +215,34 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let c_const: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(C_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
@@ -272,7 +312,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: array_bool_and {} <-> {} /\\ {}", c_display, a_display, b_display);
+                    info!(
+                        "Violated constraint: array_bool_and {} <-> {} /\\ {}",
+                        c_display, a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -294,8 +337,10 @@ impl BoolFunctionalEvaluator {
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-            let as_array = args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
-            let bs_array = args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
+            let as_array =
+                args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
+            let bs_array =
+                args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
 
             let or_as_array = as_array.iter().map(|&b| b as i64).sum::<i64>();
             let or_bs_array = bs_array.iter().map(|&b| b as i64).sum::<i64>();
@@ -332,18 +377,23 @@ impl BoolFunctionalEvaluator {
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let vars_involved = self
             .args_extractor
-   
-         .extract_literal_identifiers_with_index(&constraint.call.args);
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
@@ -392,7 +442,7 @@ impl BoolFunctionalEvaluator {
                         b_const.unwrap().to_string()
                     } else {
                         b_key.as_deref().unwrap_or("<const>").to_string()
-                    };  
+                    };
                     info!("Violated constraint: bool_eq {} = {}", a_display, b_display);
                 }
                 violation = 1.0;
@@ -408,23 +458,34 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let c_const: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(C_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
@@ -478,7 +539,7 @@ impl BoolFunctionalEvaluator {
             };
             if c_value != (a_value == b_value) {
                 if verbose {
-                   let a_display = if a_key.is_none() {
+                    let a_display = if a_key.is_none() {
                         a_const.unwrap().to_string()
                     } else {
                         a_key.as_deref().unwrap_or("<const>").to_string()
@@ -493,7 +554,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_eq_reif {} <-> {} = {}", c_display, a_display, b_display);       
+                    info!(
+                        "Violated constraint: bool_eq_reif {} <-> {} = {}",
+                        c_display, a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -508,17 +572,24 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
@@ -568,7 +639,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         b_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_le {} <= {}", a_display, b_display);
+                    info!(
+                        "Violated constraint: bool_le {} <= {}",
+                        a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -583,27 +657,37 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
 
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let c_const: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
-
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -670,7 +754,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_le_reif {} <-> {} <= {}", c_display, a_display, b_display);
+                    info!(
+                        "Violated constraint: bool_le_reif {} <-> {} <= {}",
+                        c_display, a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -692,17 +779,23 @@ impl BoolFunctionalEvaluator {
             &call,
             &self.arrays,
         );
-        let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&call.args);
+        let literal_vars_map = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&call.args);
         let term_key: Option<String> = self.identifier_from_vars(&literal_vars_map, C_TERM_INDEX);
         let term_const: Option<i64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_int_constant_term_lin_expr( &call))
+            Some(
+                self.args_extractor
+                    .extract_int_constant_term_lin_expr(&call),
+            )
         } else {
             None
         };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
-            let bs_array = args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
+            let bs_array =
+                args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
             let term_value = if let Some(tc) = term_const {
                 tc
             } else {
@@ -717,7 +810,6 @@ impl BoolFunctionalEvaluator {
                     _ => panic!("Expected int variable for term, found other type"),
                 }
             };
-
 
             let mut verbose_terms = String::new();
 
@@ -740,7 +832,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         term_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_lin_eq {} = {}", left_side_term, term_display);
+                    info!(
+                        "Violated constraint: bool_lin_eq {} = {}",
+                        left_side_term, term_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -753,7 +848,7 @@ impl BoolFunctionalEvaluator {
         &self,
         constraint: &CallWithDefines,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-       let args_extractor = self.args_extractor.clone();
+        let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
         let call = constraint.call.clone();
         let verbose = self.verbose;
@@ -762,17 +857,23 @@ impl BoolFunctionalEvaluator {
             &call,
             &self.arrays,
         );
-        let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&call.args);
+        let literal_vars_map = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&call.args);
         let term_key: Option<String> = self.identifier_from_vars(&literal_vars_map, C_TERM_INDEX);
         let term_const: Option<i64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_int_constant_term_lin_expr( &call))
+            Some(
+                self.args_extractor
+                    .extract_int_constant_term_lin_expr(&call),
+            )
         } else {
             None
         };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
-            let bs_array = args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
+            let bs_array =
+                args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
             let term_value = if let Some(tc) = term_const {
                 tc
             } else {
@@ -809,7 +910,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         term_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_lin_le {} <= {}", verbose_terms, term_display);
+                    info!(
+                        "Violated constraint: bool_lin_le {} <= {}",
+                        verbose_terms, term_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -824,16 +928,24 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-              let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
@@ -898,27 +1010,37 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let c_const: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(C_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
-
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -985,7 +1107,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_lt_reif {} <-> {} < {}", c_display, a_display, b_display);
+                    info!(
+                        "Violated constraint: bool_lt_reif {} <-> {} < {}",
+                        c_display, a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1000,26 +1125,32 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
 
-
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-           let a_value = if let Some(av) = a_const {
+            let a_value = if let Some(av) = a_const {
                 av
             } else {
                 let key_ref = a_key
@@ -1061,7 +1192,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         b_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_not {} = not({})", a_display, b_display);
+                    info!(
+                        "Violated constraint: bool_not {} = not({})",
+                        a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1076,27 +1210,37 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let c_const: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(C_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
-
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1165,7 +1309,10 @@ impl BoolFunctionalEvaluator {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
 
-                    info!(r"Violated constraint: bool_or {} <-> {} \/ {}", c_display, a_display, b_display);
+                    info!(
+                        r"Violated constraint: bool_or {} <-> {} \/ {}",
+                        c_display, a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1181,27 +1328,37 @@ impl BoolFunctionalEvaluator {
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
 
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_const: Option<bool> = if b_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let c_const: Option<bool> = if c_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(C_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
-
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1268,7 +1425,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         c_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool_xor {} <-> {} xor {}", c_display, a_display, b_display);
+                    info!(
+                        "Violated constraint: bool_xor {} <-> {} xor {}",
+                        c_display, a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1283,21 +1443,27 @@ impl BoolFunctionalEvaluator {
         solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
         let a_const: Option<bool> = if a_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(A_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
         let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
         let b_const: Option<i64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_int_value(B_TERM_INDEX, &constraint.call, solution))
+            Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call, solution),
+            )
         } else {
             None
         };
-
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1344,7 +1510,10 @@ impl BoolFunctionalEvaluator {
                     } else {
                         b_key.as_deref().unwrap_or("<const>").to_string()
                     };
-                    info!("Violated constraint: bool2int {} = {}", a_display, b_display);
+                    info!(
+                        "Violated constraint: bool2int {} = {}",
+                        a_display, b_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1373,7 +1542,6 @@ impl BoolFunctionalEvaluator {
         left_side_term
     }
 
-    
     fn identifier_from_vars(
         &self,
         vars: &HashMap<i64, Identifier>,

@@ -1,10 +1,9 @@
-
 use crate::{args_extractor::sub_types::float_args_extractor::FloatArgsExtractor, data_utility::logger::write_verbose_output};
 use crate::solution_provider::VariableValue;
 use flatzinc_serde::{Array, Identifier};
 use log::info;
 use std::collections::HashMap;
-use crate::evaluator::evaluator::CallWithDefines;
+use crate::evaluator::mini_evaluator::CallWithDefines;
 
 pub const A_TERM_INDEX: usize = 0;
 pub const B_TERM_INDEX: usize = 1;

@@ -1,4 +1,5 @@
-use crate::evaluator::evaluator::Evaluator;
+use crate::data_utility::minizinc_solution_normalizer::MiniZincSolutionNormalizer;
+use crate::evaluator::mini_evaluator::MiniEvaluator;
 use crate::solution_provider::{SolutionProvider, VariableValue};
 use flatzinc_serde::{Domain, FlatZinc, Identifier, Type, Variable};
 use rand::RngExt;
@@ -9,8 +10,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
-use crate::data_utility::minizinc_solution_normalizer::MiniZincSolutionNormalizer;
-use crate::functional_evaluator::functional_evaluator::FunctionalEvaluator;
 
 const DEFAULT_SEED: u64 = 42;
 const FEASIBILITY_TOL: f64 = 1e-3;
@@ -28,8 +27,7 @@ pub struct FlatzincBasedParticle {
     local_best_obj: Option<f64>,
     local_best_violation: f64,
     solution_provider: SolutionProvider,
-    //invariant_evaluator: Evaluator,
-    invariant_evaluator: FunctionalEvaluator,
+    invariant_evaluator: MiniEvaluator,
     fzn_path: PathBuf,
     ozn_path: PathBuf,
     rng: ChaCha20Rng,
@@ -119,10 +117,8 @@ impl FlatzincBasedParticle {
         let s = s.strip_prefix("\u{feff}").unwrap_or(&s);
         let fzn: FlatZinc = from_str(s).expect("Failed to parse flatzinc json");
         self.solution_provider = SolutionProvider::new(fzn.clone(), &self.ozn_path);
-        //self.invariant_evaluator = Evaluator::new(&*self.fzn_path, fzn.clone(), None);
-        self.invariant_evaluator = FunctionalEvaluator::new(&*self.fzn_path, fzn.clone(), None);
+        self.invariant_evaluator = MiniEvaluator::new(&*self.fzn_path, fzn.clone(), None);
 
-        // collect, sort by trailing numeric suffix, and build maps
         let mut vars: Vec<(String, Variable)> = fzn
             .variables
             .iter()
@@ -130,7 +126,6 @@ impl FlatzincBasedParticle {
             .map(|(id, var)| (id.clone(), var.clone()))
             .collect();
 
-        // sort by numeric suffix (uses var_index defined on impl)
         vars.sort_by_key(|(id, _)| Self::var_index(id).unwrap_or(usize::MAX));
 
         self.variables.clear();
@@ -186,7 +181,6 @@ impl FlatzincBasedParticle {
                 }
                 _ => continue,
             }
-
         }
 
         let mut id = 1;
@@ -316,12 +310,9 @@ impl FlatzincBasedParticle {
     }
 
     fn var_index(name: &str) -> Option<usize> {
-        // iterate from the end: first skip trailing non-digits (e.g. trailing underscores),
-        // then collect the contiguous digit run immediately before them.
         let mut digits_rev = String::new();
         let mut iter = name.chars().rev();
 
-        // find first digit from the end (skip trailing non-digits)
         while let Some(ch) = iter.next() {
             if ch.is_ascii_digit() {
                 digits_rev.push(ch);
@@ -329,12 +320,10 @@ impl FlatzincBasedParticle {
             }
         }
 
-        // if no digit found at all
         if digits_rev.is_empty() {
             return None;
         }
 
-        // collect remaining contiguous digits (still in reverse order)
         for ch in iter {
             if ch.is_ascii_digit() {
                 digits_rev.push(ch);
@@ -424,12 +413,8 @@ impl FlatzincBasedPSO {
                 self.global_best_violation = particle.local_best_violation();
             }
         }
-        println!(
-            "Initial best solution:\n {:?}",
-            self.global_best_position
-        );
+        println!("Initial best solution:\n {:?}", self.global_best_position);
 
-        //Search
         for iter in 0..self.max_iteration {
             for particle in &mut self.swarm {
                 particle.update_velocity_and_position(

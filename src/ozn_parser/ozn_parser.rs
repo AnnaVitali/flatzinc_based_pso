@@ -20,8 +20,7 @@ impl OznParser {
 
         // Dynamic pre-allocation based on number of lines
         let estimated_lines = content.lines().count();
-        self.output_variable_map
-            .reserve(estimated_lines);
+        self.output_variable_map.reserve(estimated_lines);
 
         for line in content.lines() {
             let line = line.trim();

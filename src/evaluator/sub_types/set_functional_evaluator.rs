@@ -1,5 +1,5 @@
 use crate::args_extractor::sub_types::set_args_extractor::SetArgsExtractor;
-use crate::evaluator::evaluator::CallWithDefines;
+use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::solution_provider::VariableValue;
 use flatzinc_serde::{Array, Identifier};
 use log::info;
@@ -42,12 +42,16 @@ impl SetFunctionalEvaluator {
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-            let array_value = args_extractor.extract_set_array_element(ARRAY_INDEX, &call, &arrays, solution);
+            let array_value =
+                args_extractor.extract_set_array_element(ARRAY_INDEX, &call, &arrays, solution);
             let value = args_extractor.extract_set_value(Z_TERM_INDEX, &call, solution);
 
             if array_value != value {
                 if verbose {
-                    info!("Violated constraint: array_set_element {:?} = {:?}", array_value, value);
+                    info!(
+                        "Violated constraint: array_set_element {:?} = {:?}",
+                        array_value, value
+                    );
                 }
                 violation = array_value.difference(&value).count() as f64;
             }
@@ -62,19 +66,27 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let set_key: Option<String> = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let set_const: Option<HashSet<i64>> = if set_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let value_key: Option<String> = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let value_const: Option<i64> = if value_key.is_none() {
-            Some(self.args_extractor.extract_int_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_int_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
-             None
-         };
+            None
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -82,7 +94,9 @@ impl SetFunctionalEvaluator {
             let set = if let Some(ref s) = set_const {
                 s.clone()
             } else {
-                let key_ref = set_key.as_ref().expect("Expected variable for set term in solution");
+                let key_ref = set_key
+                    .as_ref()
+                    .expect("Expected variable for set term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -93,7 +107,9 @@ impl SetFunctionalEvaluator {
             let value = if let Some(v) = value_const {
                 v
             } else {
-                let key_ref = value_key.as_ref().expect("Expected variable for value term in solution");
+                let key_ref = value_key
+                    .as_ref()
+                    .expect("Expected variable for value term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Int(v)) => *v,
                     _ => panic!("Expected integer variable, found other type variable"),
@@ -112,7 +128,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         value_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_card |{}| = {}", set_display, value_display);
+                    info!(
+                        "Violated constraint: set_card |{}| = {}",
+                        set_display, value_display
+                    );
                 }
                 violation = (real_card as i64 - value).abs() as f64;
             }
@@ -127,22 +146,33 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let z_key = self.identifier_from_vars(&vars_involved, Z_TERM_INDEX);
         let z_const = if z_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Z_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Z_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
@@ -153,7 +183,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -162,7 +194,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -171,13 +205,14 @@ impl SetFunctionalEvaluator {
             let z_value = if let Some(ref s) = z_const {
                 s.clone()
             } else {
-                let key_ref = z_key.as_ref().expect("Expected variable for z term in solution");
+                let key_ref = z_key
+                    .as_ref()
+                    .expect("Expected variable for z term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
                 }
             };
-
 
             let diff: HashSet<i64> = x_value.difference(&y_value).copied().collect();
 
@@ -198,7 +233,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         z_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_diff {} \\ {} = {}", x_display, y_display, z_display);
+                    info!(
+                        "Violated constraint: set_diff {} \\ {} = {}",
+                        x_display, y_display, z_display
+                    );
                 }
 
                 violation = diff.symmetric_difference(&z_value).count() as f64;
@@ -214,27 +252,37 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
-        let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);  
+        let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-           let x_value = if let Some(ref s) = x_const {
+            let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -244,7 +292,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -279,25 +329,36 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -305,7 +366,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -314,7 +377,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -323,7 +388,9 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(v) = r_const {
                 v
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(v)) => *v,
                     _ => panic!("Expected boolean variable, found other type variable"),
@@ -332,7 +399,7 @@ impl SetFunctionalEvaluator {
 
             if !(r_value == (x_value == y_value)) {
                 if verbose {
-                    let x_display =  if x_key.is_none() {
+                    let x_display = if x_key.is_none() {
                         format!("{:?}", x_value)
                     } else {
                         x_key.as_ref().unwrap().to_string()
@@ -347,7 +414,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated consraint: set_eq_reif {} <-> {:?} = {:?}", r_display, x_display, y_display);
+                    info!(
+                        "Violated consraint: set_eq_reif {} <-> {:?} = {:?}",
+                        r_display, x_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -362,26 +432,36 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let elem_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let elem_const = if elem_key.is_none() {
-            Some(self.args_extractor.extract_set_element(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_element(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
-             None
-          };
+            None
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
-           let elem_value = if let Some(v) = elem_const {
+            let elem_value = if let Some(v) = elem_const {
                 v
             } else {
-                let key_ref = elem_key.as_ref().expect("Expected variable for element term in solution");
+                let key_ref = elem_key
+                    .as_ref()
+                    .expect("Expected variable for element term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Int(v)) => *v,
                     _ => panic!("Expected integer variable, found other type variable"),
@@ -391,7 +471,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -410,7 +492,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         y_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_in {} in {:?}", elem_display, y_display);
+                    info!(
+                        "Violated constraint: set_in {} in {:?}",
+                        elem_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -425,41 +510,56 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let elem_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let elem_const = if elem_key.is_none() {
-            Some(self.args_extractor.extract_set_element(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_element(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
-        } else {
-             None
-          };
-        let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
-        let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-            };
+        };
+        let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
+        let r_const = if r_key.is_none() {
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
+        } else {
+            None
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
             let elem_value = if let Some(v) = elem_const {
                 v
             } else {
-                let key_ref = elem_key.as_ref().expect("Expected variable for element term in solution");
+                let key_ref = elem_key
+                    .as_ref()
+                    .expect("Expected variable for element term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Int(v)) => *v,
                     _ => panic!("Expected integer variable, found other type variable"),
                 }
             };
-             let y_value = if let Some(ref s) = y_const {
+            let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -468,7 +568,9 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(v) = r_const {
                 v
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(v)) => *v,
                     _ => panic!("Expected boolean variable, found other type variable"),
@@ -492,7 +594,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_in_reif {} <-> {} in {:?}", r_display, elem_display, y_display);
+                    info!(
+                        "Violated constraint: set_in_reif {} <-> {} in {:?}",
+                        r_display, elem_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -507,42 +612,57 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let z_key = self.identifier_from_vars(&vars_involved, Z_TERM_INDEX);
         let z_const = if z_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Z_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Z_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
                 }
-            };  
+            };
 
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -552,7 +672,9 @@ impl SetFunctionalEvaluator {
             let z_value = if let Some(ref s) = z_const {
                 s.clone()
             } else {
-                let key_ref = z_key.as_ref().expect("Expected variable for z term in solution");
+                let key_ref = z_key
+                    .as_ref()
+                    .expect("Expected variable for z term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -578,7 +700,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         z_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: {} set_intersect {} = {}", x_display, y_display, z_display);
+                    info!(
+                        "Violated constraint: {} set_intersect {} = {}",
+                        x_display, y_display, z_display
+                    );
                 }
                 violation = intersect.difference(&z_value).count() as f64;
             }
@@ -593,27 +718,37 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
 
-           let x_value = if let Some(ref s) = x_const {
+            let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -623,7 +758,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -668,32 +805,45 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
-           let x_value = if let Some(ref s) = x_const {
+            let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -702,7 +852,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -711,7 +863,9 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(v) = r_const {
                 v
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(v)) => *v,
                     _ => panic!("Expected boolean variable, found other type variable"),
@@ -741,7 +895,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_le_reif {} <-> {} <= {}", r_display, x_display, y_display);
+                    info!(
+                        "Violated constraint: set_le_reif {} <-> {} <= {}",
+                        r_display, x_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -793,25 +950,36 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -819,7 +987,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -828,7 +998,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -837,7 +1009,9 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(v) = r_const {
                 v
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(v)) => *v,
                     _ => panic!("Expected boolean variable, found other type variable"),
@@ -867,7 +1041,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_lt_reif {} <-> {} < {}", r_display, x_display, y_display);
+                    info!(
+                        "Violated constraint: set_lt_reif {} <-> {} < {}",
+                        r_display, x_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -882,19 +1059,27 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -902,7 +1087,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -911,7 +1098,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -945,25 +1134,36 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
-        let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);    
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -971,7 +1171,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -980,7 +1182,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -989,7 +1193,9 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(ref b) = r_const {
                 *b
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(v)) => *v,
                     _ => panic!("Expected bool variable, found other type variable"),
@@ -1013,7 +1219,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_ne_reif {} <-> {:?} != {:?}", r_display, x_display, y_display);
+                    info!(
+                        "Violated constraint: set_ne_reif {} <-> {:?} != {:?}",
+                        r_display, x_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1028,20 +1237,27 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
-        
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1049,7 +1265,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1058,7 +1276,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1077,7 +1297,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         y_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_subset {} subset {}", x_display, y_display);
+                    info!(
+                        "Violated constraint: set_subset {} subset {}",
+                        x_display, y_display
+                    );
                 }
                 violation = x_value.difference(&y_value).count() as f64;
             }
@@ -1092,25 +1315,36 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1118,7 +1352,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1127,7 +1363,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1136,7 +1374,9 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(v) = r_const {
                 v
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(v)) => *v,
                     _ => panic!("Expected boolean variable, found other type variable"),
@@ -1160,7 +1400,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_subset_reif {} <-> {} subset {}", r_display, x_display, y_display);
+                    info!(
+                        "Violated constraint: set_subset_reif {} <-> {} subset {}",
+                        r_display, x_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1175,19 +1418,27 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1195,7 +1446,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1204,13 +1457,14 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
                 }
             };
-            
 
             if !x_value.is_superset(&y_value) {
                 if verbose {
@@ -1224,7 +1478,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         y_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_superset {} superset {}", x_display, y_display);
+                    info!(
+                        "Violated constraint: set_superset {} superset {}",
+                        x_display, y_display
+                    );
                 }
                 violation = x_value.difference(&y_value).count() as f64;
             }
@@ -1239,25 +1496,36 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let r_key = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
         let r_const = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
@@ -1265,7 +1533,9 @@ impl SetFunctionalEvaluator {
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1274,7 +1544,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1283,13 +1555,14 @@ impl SetFunctionalEvaluator {
             let r_value = if let Some(ref b) = r_const {
                 *b
             } else {
-                let key_ref = r_key.as_ref().expect("Expected variable for r term in solution");
+                let key_ref = r_key
+                    .as_ref()
+                    .expect("Expected variable for r term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Bool(b)) => *b,
                     _ => panic!("Expected bool variable, found other type variable"),
                 }
             };
-           
 
             if !(r_value == x_value.is_superset(&y_value)) {
                 if verbose {
@@ -1308,7 +1581,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         r_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_superset_reif {} <-> {} superset {}", r_display, x_display, y_display);
+                    info!(
+                        "Violated constraint: set_superset_reif {} <-> {} superset {}",
+                        r_display, x_display, y_display
+                    );
                 }
                 violation = 1.0;
             }
@@ -1323,33 +1599,45 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let z_key = self.identifier_from_vars(&vars_involved, Z_TERM_INDEX);
         let z_const = if z_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Z_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Z_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
-        
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1358,7 +1646,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1367,7 +1657,9 @@ impl SetFunctionalEvaluator {
             let z_value = if let Some(ref s) = z_const {
                 s.clone()
             } else {
-                let key_ref = z_key.as_ref().expect("Expected variable for z term in solution");
+                let key_ref = z_key
+                    .as_ref()
+                    .expect("Expected variable for z term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1392,7 +1684,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         z_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_symdiff {} sym diff {} = {}", x_display, y_display, z_display);
+                    info!(
+                        "Violated constraint: set_symdiff {} sym diff {} = {}",
+                        x_display, y_display, z_display
+                    );
                 }
                 violation = sym_diff.difference(&z_value).count() as f64;
             }
@@ -1407,32 +1702,45 @@ impl SetFunctionalEvaluator {
         _solution: &HashMap<String, VariableValue>,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let vars_involved  = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
         let x_key = self.identifier_from_vars(&vars_involved, X_TERM_INDEX);
         let x_const = if x_key.is_none() {
-            Some(self.args_extractor.extract_set_value(X_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(X_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
         };
         let y_key = self.identifier_from_vars(&vars_involved, Y_TERM_INDEX);
         let y_const = if y_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Y_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Y_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
         let z_key = self.identifier_from_vars(&vars_involved, Z_TERM_INDEX);
         let z_const = if z_key.is_none() {
-            Some(self.args_extractor.extract_set_value(Z_TERM_INDEX, &constraint.call, _solution))
+            Some(
+                self.args_extractor
+                    .extract_set_value(Z_TERM_INDEX, &constraint.call, _solution),
+            )
         } else {
             None
-         };
+        };
 
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
             let x_value = if let Some(ref s) = x_const {
                 s.clone()
             } else {
-                let key_ref = x_key.as_ref().expect("Expected variable for x term in solution");
+                let key_ref = x_key
+                    .as_ref()
+                    .expect("Expected variable for x term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1441,7 +1749,9 @@ impl SetFunctionalEvaluator {
             let y_value = if let Some(ref s) = y_const {
                 s.clone()
             } else {
-                let key_ref = y_key.as_ref().expect("Expected variable for y term in solution");
+                let key_ref = y_key
+                    .as_ref()
+                    .expect("Expected variable for y term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1450,7 +1760,9 @@ impl SetFunctionalEvaluator {
             let z_value = if let Some(ref s) = z_const {
                 s.clone()
             } else {
-                let key_ref = z_key.as_ref().expect("Expected variable for z term in solution");
+                let key_ref = z_key
+                    .as_ref()
+                    .expect("Expected variable for z term in solution");
                 match solution.get(key_ref) {
                     Some(VariableValue::Set(v)) => v.clone(),
                     _ => panic!("Expected set variable, found other type variable"),
@@ -1475,7 +1787,10 @@ impl SetFunctionalEvaluator {
                     } else {
                         z_key.as_ref().unwrap().to_string()
                     };
-                    info!("Violated constraint: set_union {} U {} = {}", x_display, y_display, z_display);
+                    info!(
+                        "Violated constraint: set_union {} U {} = {}",
+                        x_display, y_display, z_display
+                    );
                 }
                 violation = union.difference(&z_value).count() as f64;
             }
@@ -1484,7 +1799,7 @@ impl SetFunctionalEvaluator {
         })
     }
 
-        fn identifier_from_vars(
+    fn identifier_from_vars(
         &self,
         vars: &HashMap<i64, Identifier>,
         index: usize,

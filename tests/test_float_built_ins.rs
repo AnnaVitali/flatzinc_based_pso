@@ -1,4 +1,4 @@
-use constraint_evaluator::functional_evaluator::functional_evaluator::FunctionalEvaluator;
+use constraint_evaluator::evaluator::mini_evaluator::MiniEvaluator;
 use constraint_evaluator::solution_provider::SolutionProvider;
 use flatzinc_serde::FlatZinc;
 use rand_distr::num_traits::Float;
@@ -46,7 +46,7 @@ pub(crate) fn test_array_float_element() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_float("c".to_string(), c);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -93,7 +93,7 @@ pub(crate) fn test_array_var_float_element() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("c".to_string(), c);
     solution_provider.provide_array_of_float("as".to_string(), as_array.clone());
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -139,7 +139,7 @@ pub(crate) fn test_float_abs() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -184,7 +184,7 @@ pub(crate) fn test_float_acos() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -229,7 +229,7 @@ pub(crate) fn test_float_acosh() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -274,7 +274,7 @@ pub(crate) fn test_float_asin() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -319,7 +319,7 @@ pub(crate) fn test_float_asinh() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -364,7 +364,7 @@ pub(crate) fn test_float_atan() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -401,7 +401,7 @@ pub(crate) fn test_float_atanh() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 0.5;
@@ -409,7 +409,7 @@ pub(crate) fn test_float_atanh() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -439,7 +439,7 @@ pub(crate) fn test_float_cos() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -447,7 +447,7 @@ pub(crate) fn test_float_cos() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -481,7 +481,7 @@ pub(crate) fn test_float_cosh() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -489,7 +489,7 @@ pub(crate) fn test_float_cosh() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -519,7 +519,7 @@ pub(crate) fn test_float_div() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 10.0;
@@ -527,7 +527,7 @@ pub(crate) fn test_float_div() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -557,7 +557,7 @@ pub(crate) fn test_float_eq_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.5;
@@ -565,7 +565,7 @@ pub(crate) fn test_float_eq_reif() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -595,7 +595,7 @@ pub(crate) fn test_float_exp() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.5;
@@ -603,7 +603,7 @@ pub(crate) fn test_float_exp() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -633,7 +633,7 @@ pub(crate) fn test_float_le() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut a = 1.0;
@@ -641,7 +641,7 @@ pub(crate) fn test_float_le() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -678,7 +678,7 @@ pub(crate) fn test_float_le_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 3.0;
@@ -686,7 +686,7 @@ pub(crate) fn test_float_le_reif() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -716,13 +716,13 @@ pub(crate) fn test_float_lin_eq_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![2.0, 2.0];
     solution_provider.provide_array_of_float("bs".to_string(), bs.clone());
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -758,7 +758,7 @@ pub(crate) fn test_float_lin_le() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![2.0, 2.0];
@@ -766,7 +766,7 @@ pub(crate) fn test_float_lin_le() -> Result<(), Box<dyn Error>> {
 
     solution_provider.provide_array_of_float("bs".to_string(), bs.clone());
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -802,13 +802,13 @@ pub(crate) fn test_float_lin_le_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![1.5, 2.5];
     solution_provider.provide_array_of_float("bs".to_string(), bs);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -844,14 +844,14 @@ pub(crate) fn test_float_lin_lt() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![2.0, 2.0];
     let const_term = 5.0;
     solution_provider.provide_array_of_float("bs".to_string(), bs);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -887,13 +887,13 @@ pub(crate) fn test_float_lin_lt_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![1.0, -2.5];
     solution_provider.provide_array_of_float("bs".to_string(), bs);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -929,13 +929,13 @@ pub(crate) fn test_float_lin_ne() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![1.5, 2.5];
     solution_provider.provide_array_of_float("bs".to_string(), bs);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -971,13 +971,13 @@ pub(crate) fn test_float_lin_ne_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut bs = vec![2.0, 1.0];
     solution_provider.provide_array_of_float("bs".to_string(), bs);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1013,7 +1013,7 @@ pub(crate) fn test_float_ln() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 4.4816890703380645;
@@ -1021,7 +1021,7 @@ pub(crate) fn test_float_ln() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1051,7 +1051,7 @@ pub(crate) fn test_float_log10() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1059,7 +1059,7 @@ pub(crate) fn test_float_log10() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1089,7 +1089,7 @@ pub(crate) fn test_float_log2() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1097,7 +1097,7 @@ pub(crate) fn test_float_log2() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1127,7 +1127,7 @@ pub(crate) fn test_float_lt() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut a = 1.4;
@@ -1135,7 +1135,7 @@ pub(crate) fn test_float_lt() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1173,7 +1173,7 @@ pub(crate) fn test_float_lt_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut a = 1.4;
@@ -1181,7 +1181,7 @@ pub(crate) fn test_float_lt_reif() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1219,7 +1219,7 @@ pub(crate) fn test_float_max() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.2;
@@ -1227,7 +1227,7 @@ pub(crate) fn test_float_max() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1264,7 +1264,7 @@ pub(crate) fn test_float_min() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1272,7 +1272,7 @@ pub(crate) fn test_float_min() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1309,7 +1309,7 @@ pub(crate) fn test_float_ne() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1317,7 +1317,7 @@ pub(crate) fn test_float_ne() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1354,7 +1354,7 @@ pub(crate) fn test_float_ne_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1362,7 +1362,7 @@ pub(crate) fn test_float_ne_reif() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1399,7 +1399,7 @@ pub(crate) fn test_float_plus() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 2.0;
@@ -1407,7 +1407,7 @@ pub(crate) fn test_float_plus() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1439,7 +1439,7 @@ pub(crate) fn test_float_pow() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 2.0;
@@ -1447,7 +1447,7 @@ pub(crate) fn test_float_pow() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1477,7 +1477,7 @@ pub(crate) fn test_float_sin() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1485,7 +1485,7 @@ pub(crate) fn test_float_sin() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1515,7 +1515,7 @@ pub(crate) fn test_float_sinh() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1523,7 +1523,7 @@ pub(crate) fn test_float_sinh() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1553,7 +1553,7 @@ pub(crate) fn test_float_sqrt() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 4.0;
@@ -1561,7 +1561,7 @@ pub(crate) fn test_float_sqrt() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1591,7 +1591,7 @@ pub(crate) fn test_float_tan() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1599,7 +1599,7 @@ pub(crate) fn test_float_tan() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1629,7 +1629,7 @@ pub(crate) fn test_float_tanh() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 1.0;
@@ -1637,7 +1637,7 @@ pub(crate) fn test_float_tanh() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1667,7 +1667,7 @@ pub(crate) fn test_float_times() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 3.0;
@@ -1676,7 +1676,7 @@ pub(crate) fn test_float_times() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_float("a".to_string(), a);
     solution_provider.provide_float("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
@@ -1706,7 +1706,7 @@ pub(crate) fn test_int2float() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-    let fzn  = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = 2;
@@ -1714,7 +1714,7 @@ pub(crate) fn test_int2float() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_int("x".to_string(), a);
     solution_provider.provide_float("y".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 

@@ -14,7 +14,10 @@ impl BoolArgsExtractor {
         Self { args_extractor }
     }
 
-    pub fn extract_literal_identifiers_with_index(&self, args: &[Argument]) -> HashMap<i64, String> {
+    pub fn extract_literal_identifiers_with_index(
+        &self,
+        args: &[Argument],
+    ) -> HashMap<i64, String> {
         self.args_extractor
             .extract_literal_identifiers_with_index(args)
     }

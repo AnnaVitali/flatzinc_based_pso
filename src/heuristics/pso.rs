@@ -108,7 +108,7 @@ impl PSOParticle {
             let vel = self.rng.random_range(-0.1..0.1);
             self.position.push(x);
             self.velocity.push(vel);
-            
+
             id += 1;
         }
 
@@ -243,10 +243,7 @@ impl PSO {
             }
         }
 
-        println!(
-            "Initial best solution:\n {:?}",
-            self.global_best_position        );
-
+        println!("Initial best solution:\n {:?}", self.global_best_position);
 
         //search
         for iter in 0..self.max_iteration {
@@ -282,7 +279,7 @@ impl PSO {
             "Final best solution:\n {:?}\nObjective: {:?}\nViolation: {:?}",
             self.global_best_position, self.global_best_obj, self.global_best_violation
         );
-        
+
         (self.global_best_obj, self.global_best_violation)
     }
 }

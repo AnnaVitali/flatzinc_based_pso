@@ -1,4 +1,4 @@
-use constraint_evaluator::functional_evaluator::functional_evaluator::FunctionalEvaluator;
+use constraint_evaluator::evaluator::mini_evaluator::MiniEvaluator;
 use constraint_evaluator::solution_provider::SolutionProvider;
 use flatzinc_serde::FlatZinc;
 use std::error::Error;
@@ -41,14 +41,14 @@ pub(crate) fn test_array_bool_and() -> Result<(), Box<dyn Error>> {
     let mut as_array = vec![true, true, true];
     solution_provider.provide_array_of_bool("as".to_string(), as_array);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     as_array = vec![true, false, true];
     solution_provider.provide_array_of_bool("as".to_string(), as_array);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -77,20 +77,20 @@ pub(crate) fn test_array_bool_xor() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path_ozn.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let mut as_array = vec![true, true, true];
     solution_provider.provide_array_of_bool("as".to_string(), as_array);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     as_array = vec![true, false, true];
     solution_provider.provide_array_of_bool("as".to_string(), as_array);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -119,7 +119,7 @@ pub(crate) fn test_array_var_bool_element() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path_ozn.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let as_array = vec![true, true, true];
@@ -129,14 +129,14 @@ let fzn = load(&path)?;
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_bool("c".to_string(), c);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     c = false;
     solution_provider.provide_bool("c".to_string(), c);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -165,7 +165,7 @@ pub(crate) fn test_array_bool_element() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let b = 2;
@@ -174,14 +174,14 @@ let fzn = load(&path)?;
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_bool("c".to_string(), c);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     c = true;
     solution_provider.provide_bool("c".to_string(), c);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -218,15 +218,15 @@ pub(crate) fn test_bool_clause() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_array_of_bool("pos".to_string(), pos);
     solution_provider.provide_array_of_bool("neg".to_string(), neg.clone());
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     pos = vec![false, false];
     solution_provider.provide_array_of_bool("pos".to_string(), pos);
     solution_provider.provide_array_of_bool("neg".to_string(), neg.clone());
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -259,19 +259,19 @@ pub(crate) fn test_bool_eq_reif() -> Result<(), Box<dyn Error>> {
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let a = true;
-    let mut b  = true;
+    let mut b = true;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     b = false;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -300,7 +300,7 @@ pub(crate) fn test_bool_le() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = false;
     let mut b = true;
@@ -308,8 +308,8 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = true;
@@ -317,7 +317,7 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -346,7 +346,7 @@ pub(crate) fn test_bool_le_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = false;
     let mut b = true;
@@ -354,8 +354,8 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = true;
@@ -363,7 +363,7 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -392,20 +392,20 @@ pub(crate) fn test_bool_lin_eq() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut bs = vec![true, false];
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     solution_provider.provide_array_of_bool("bs".to_string(), bs);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     bs = vec![false, false];
     solution_provider.provide_array_of_bool("bs".to_string(), bs);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -434,21 +434,20 @@ pub(crate) fn test_bool_lin_le() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     solution_provider.provide_array_of_bool("bs".to_string(), vec![true, false]);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     solution_provider.provide_array_of_bool("bs".to_string(), vec![true, true]);
 
-    let mut invariant_evaluator =
-        FunctionalEvaluator::new(&*path, fzn, Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn, Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -477,7 +476,7 @@ pub(crate) fn test_bool_lt_reif() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = false;
     let mut b = true;
@@ -485,8 +484,8 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = true;
@@ -494,7 +493,7 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     Ok(())
@@ -523,7 +522,7 @@ pub(crate) fn test_bool_lt() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = false;
     let mut b = true;
@@ -531,8 +530,8 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = true;
@@ -540,7 +539,7 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -569,7 +568,7 @@ pub(crate) fn test_bool_not() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = false;
     let b = true;
@@ -577,15 +576,15 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = true;
     solution_provider.provide_bool("a".to_string(), a);
     solution_provider.provide_bool("b".to_string(), b);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -614,7 +613,7 @@ pub(crate) fn test_bool_or() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = true;
     let mut b = false;
@@ -625,8 +624,8 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("b".to_string(), b);
     solution_provider.provide_bool("c".to_string(), c);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = false;
@@ -636,7 +635,7 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("b".to_string(), b);
     solution_provider.provide_bool("c".to_string(), c);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())
@@ -665,7 +664,7 @@ pub(crate) fn test_bool_xor() -> Result<(), Box<dyn Error>> {
         return Err(format!("file not found: {}", path.display()).into());
     }
 
-let fzn = load(&path)?;
+    let fzn = load(&path)?;
 
     let mut a = true;
     let mut b = true;
@@ -675,8 +674,8 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("b".to_string(), b);
     solution_provider.provide_bool("c".to_string(), c);
 
-    let mut invariant_evaluator = FunctionalEvaluator::new(&*path, fzn.clone(), Some("verbose"));
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn.clone(), Some("verbose"));
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 0.0);
 
     a = false;
@@ -686,7 +685,7 @@ let fzn = load(&path)?;
     solution_provider.provide_bool("b".to_string(), b);
     solution_provider.provide_bool("c".to_string(), c);
 
-    let (_ ,violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
+    let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
     assert_eq!(violation, 1.0);
 
     Ok(())

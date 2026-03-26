@@ -1,15 +1,8 @@
-pub mod solution_provider;
 mod args_extractor;
-mod variable_assigner;
-mod ozn_parser;
+mod data_utility;
+pub mod evaluator;
 pub mod heuristics;
 mod invariant_graph;
-mod data_utility;
-mod evaluator;
-pub mod functional_evaluator;
-
-
-
-
-
-
+mod ozn_parser;
+pub mod solution_provider;
+mod variable_assigner;
