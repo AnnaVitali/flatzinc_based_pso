@@ -6,7 +6,7 @@ use crate::invariant_graph::InvariantGraph;
 use crate::solution_provider::{SolutionProvider, VariableValue};
 use crate::variable_assigner::variable_assigner::VariableAssigner;
 use env_logger::Env;
-use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type};
+use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type, Variable};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
@@ -576,7 +576,7 @@ impl MiniEvaluator {
                 let objective_id: &str = match objective_lit {
                     Literal::Identifier(id) => id.as_str(),
                     Literal::String(id) => id.as_str(),
-                    _ => log::error!("Objective literal must be an identifier or string"),
+                    _ => panic!("Objective literal must be an identifier or string"),
                 };
                 if let Some(obj_val) = self.solution.get(objective_id) {
                     match obj_val {
@@ -604,7 +604,7 @@ impl MiniEvaluator {
         if let Some(objective_lit) = self.fzn.solve.objective.as_ref() {
             let objective_id: &str = match objective_lit {
                 Literal::Identifier(id) => id.as_str(),
-                _ => log::error!("Objective must be an identifier or string"),
+                _ => panic!("Objective must be an identifier or string"),
             };
             if let Some(obj_val) = self.solution.get(objective_id) {
                 match obj_val {
