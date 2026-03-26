@@ -2,18 +2,43 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+/// An enum representing the mapping of an output variable, which can be either a scalar or an array, along with its source.
+pub enum OznMapping {
+    Scalar { source: String },
+    Array { source: String },
+}
+
+/// Default implementation for `OznMapping`, which defaults to a scalar with an empty source.
+impl Default for OznMapping {
+    fn default() -> Self {
+        OznMapping::Scalar {
+            source: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
+/// A struct responsible for parsing .ozn files and mapping output variables to their sources.
 pub struct OznParser {
+    /// A hashmap that maps output variable names to their corresponding `OznMapping`, which indicates whether the variable is a scalar or an array and its source.
     output_variable_map: HashMap<String, OznMapping>,
 }
 
+/// Implementation of the `OznParser` struct, providing methods to create a new parser, parse .ozn files, and map variables to their sources.
 impl OznParser {
+    /// Creates a new instance of `OznParser` with an empty output variable map.
     pub fn new() -> Self {
         Self {
             output_variable_map: HashMap::new(),
         }
     }
 
+    /// Parses the given .ozn file and populates the `output_variable_map` with the mappings of output variables to their sources.
+    /// 
+    /// # Arguments
+    /// * `path` - A reference to the path of the .ozn file to be parsed.
     pub fn parse(&mut self, path: &Path) {
         let content = fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("Error reading file {}: {}", path.display(), e));
@@ -105,20 +130,5 @@ impl OznParser {
         self.output_variable_map
             .get(name)
             .unwrap_or_else(|| panic!("Variable {} not found in model", name))
-    }
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub enum OznMapping {
-    Scalar { source: String },
-    Array { source: String },
-}
-
-impl Default for OznMapping {
-    fn default() -> Self {
-        OznMapping::Scalar {
-            source: String::new(),
-        }
     }
 }

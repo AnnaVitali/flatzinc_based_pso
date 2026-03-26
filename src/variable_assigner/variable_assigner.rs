@@ -15,25 +15,47 @@ use std::sync::Arc;
 type AssignFn = Arc<dyn Fn(&HashMap<String, VariableValue>) -> VariableValue + Send + Sync>;
 
 #[derive(Clone, Default)]
+/// The `VariableAssigner` struct is responsible for assigning values to defined variables based on the constraints and a partial solution.
+/// It maintains a list of defined variables, constraints that define these variables, and a mapping of assigned functions
+/// that compute the values of these variables based on the constraints and the current solution.
 pub struct VariableAssigner {
+    /// A vector of variable names that are defined by the constraints and need to be assigned values.
     defined_variable: Vec<String>,
+    /// A vector of constraints (with their defines) that are used to determine the values of the defined variables.
     constraints: Vec<CallWithDefines>,
+    /// A vector of tuples where each tuple contains a variable name and a corresponding function that computes its value based on the current solution.
     assigned_functions: Vec<(String, AssignFn)>,
+    /// An instance of `ArgsExtractor` used to extract arguments from constraints when building the assigned functions.
     args_extractor: ArgsExtractor,
+    /// A hashmap that represents the complete solution, mapping variable names to their assigned values. This is updated as variables are assigned.
     complete_solution: HashMap<String, VariableValue>,
+    /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints when building assigned functions.
     arrays: HashMap<Identifier, Array>,
+    /// An instance of `IntVariableAssigner` used to build functions for assigning integer variables based on integer constraints.
     int_variable_assigner: IntVariableAssigner,
+    /// An instance of `FloatVariableAssigner` used to build functions for assigning float variables based on float constraints.
     float_variable_assigner: FloatVariableAssigner,
+    /// An instance of `BoolVariableAssigner` used to build functions for assigning boolean variables based on boolean constraints.
     bool_variable_assigner: BoolVariableAssigner,
+    /// An instance of `SetVariableAssigner` used to build functions for assigning set variables based on set constraints.
     set_variable_assigner: SetVariableAssigner,
 }
 
+/// Custom implementation of the `Debug` trait for `VariableAssigner` to provide a more concise and informative debug output,
+/// especially for the `assigned_functions` field which contains closures that cannot be directly printed.
 impl fmt::Debug for VariableAssigner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("VariableAssigner")
             .field("defined_variable", &self.defined_variable)
             .field("constraints", &self.constraints)
-            .field("assigned_functions", &self.assigned_functions.iter().map(|(var, _)| var).collect::<Vec<_>>())
+            .field(
+                "assigned_functions",
+                &self
+                    .assigned_functions
+                    .iter()
+                    .map(|(var, _)| var)
+                    .collect::<Vec<_>>(),
+            )
             .field("args_extractor", &self.args_extractor)
             .field("complete_solution", &self.complete_solution)
             .field("arrays", &self.arrays)
@@ -45,7 +67,12 @@ impl fmt::Debug for VariableAssigner {
     }
 }
 
+/// Implementation of the `VariableAssigner` struct, providing methods to create a new assigner, assign values to defined variables based on a partial solution,
+/// and build the assigned functions based on the constraints that define the variables.
 impl VariableAssigner {
+    /// Creates a new `VariableAssigner` with the provided defined variables, constraints, and arrays.
+    /// The constructor initializes the internal state of the assigner, including the assigned functions and variable assigners for
+    /// integers, floats, booleans, and sets, which will be used to build the functions for assigning variable values based on the constraints.
     pub fn new(
         defined_variable: Vec<String>,
         constraints: Vec<CallWithDefines>,
@@ -65,6 +92,13 @@ impl VariableAssigner {
         }
     }
 
+    /// Assigns values to the defined variables based on the provided partial solution and the constraints that define these variables.
+    ///
+    /// # Arguments
+    /// * `partial_solution` - A hashmap representing the current partial solution, mapping variable names to their values.
+    /// This is used as the basis for computing the values of the defined variables.
+    /// # Returns
+    /// A hashmap representing the complete solution after assigning values to the defined variables, mapping variable names to their assigned values.
     pub fn assign_defined_variables(
         &mut self,
         partial_solution: &HashMap<String, VariableValue>,
@@ -110,11 +144,18 @@ impl VariableAssigner {
 
         if id.starts_with("int_") || id.contains("array_int") || id.contains("array_var_int") {
             self.wrap_int(constraint, variable)
-        } else if id.starts_with("float_") || id.contains("array_float") || id.contains("array_var_float"){
+        } else if id.starts_with("float_")
+            || id.contains("array_float")
+            || id.contains("array_var_float")
+        {
             self.wrap_float(constraint, variable)
-        } else if id.starts_with("bool_") || id.contains("array_bool") || id.contains("array_var_bool") {
+        } else if id.starts_with("bool_")
+            || id.contains("array_bool")
+            || id.contains("array_var_bool")
+        {
             self.wrap_bool(constraint, variable)
-        } else if id.starts_with("set_") || id.contains("array_set") || id.contains("array_var_set") {
+        } else if id.starts_with("set_") || id.contains("array_set") || id.contains("array_var_set")
+        {
             self.wrap_set(constraint, variable)
         } else {
             panic!("Unknown predicate: {}", id);
@@ -147,40 +188,19 @@ impl VariableAssigner {
         variable: &String,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_int_element" | "array_var_int_element" => self
-                .int_variable_assigner
-                .array_int_element(constraint, &self.complete_solution),
-            "int_abs" => self
-                .int_variable_assigner
-                .int_abs(constraint, &self.complete_solution),
-            "int_div" => self
-                .int_variable_assigner
-                .int_div(constraint, &self.complete_solution),
-            "int_eq" => self
-                .int_variable_assigner
-                .int_eq(constraint, &self.complete_solution),
-            "int_lin_eq" => {
-                self.int_variable_assigner
-                    .int_lin_eq(constraint, &self.complete_solution, variable)
+            "array_int_element" | "array_var_int_element" => {
+                self.int_variable_assigner.array_int_element(constraint)
             }
-            "int_max" => self
-                .int_variable_assigner
-                .int_max(constraint, &self.complete_solution),
-            "int_min" => self
-                .int_variable_assigner
-                .int_min(constraint, &self.complete_solution),
-            "int_mod" => self
-                .int_variable_assigner
-                .int_mod(constraint, &self.complete_solution),
-            "int_pow" => self
-                .int_variable_assigner
-                .int_pow(constraint, &self.complete_solution),
-            "int_times" => self
-                .int_variable_assigner
-                .int_times(constraint, &self.complete_solution),
-            "bool2int" => self
-                .bool_variable_assigner
-                .bool2int(constraint, &self.complete_solution),
+            "int_abs" => self.int_variable_assigner.int_abs(constraint),
+            "int_div" => self.int_variable_assigner.int_div(constraint),
+            "int_eq" => self.int_variable_assigner.int_eq(constraint),
+            "int_lin_eq" => self.int_variable_assigner.int_lin_eq(constraint, variable),
+            "int_max" => self.int_variable_assigner.int_max(constraint),
+            "int_min" => self.int_variable_assigner.int_min(constraint),
+            "int_mod" => self.int_variable_assigner.int_mod(constraint),
+            "int_pow" => self.int_variable_assigner.int_pow(constraint),
+            "int_times" => self.int_variable_assigner.int_times(constraint),
+            "bool2int" => self.bool_variable_assigner.bool2int(constraint),
             _ => panic!("Unhandled int constraint {}", constraint.call.id),
         }
     }
@@ -191,92 +211,38 @@ impl VariableAssigner {
         variable: &String,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_float_element" | "array_var_float_element" => self
+            "array_float_element" | "array_var_float_element" => {
+                self.float_variable_assigner.array_float_element(constraint)
+            }
+            "float_abs" => self.float_variable_assigner.float_abs(constraint),
+            "float_div" => self.float_variable_assigner.float_div(constraint),
+            "float_eq" => self.float_variable_assigner.float_eq(constraint),
+            "float_max" => self.float_variable_assigner.float_max(constraint),
+            "float_min" => self.float_variable_assigner.float_min(constraint),
+            "float_plus" => self.float_variable_assigner.float_plus(constraint),
+            "float_pow" => self.float_variable_assigner.float_pow(constraint),
+            "float_times" => self.float_variable_assigner.float_times(constraint),
+            "float_acos" => self.float_variable_assigner.float_acos(constraint),
+            "float_acosh" => self.float_variable_assigner.float_acosh(constraint),
+            "float_asin" => self.float_variable_assigner.float_asin(constraint),
+            "float_asinh" => self.float_variable_assigner.float_asinh(constraint),
+            "float_atan" => self.float_variable_assigner.float_atan(constraint),
+            "float_atanh" => self.float_variable_assigner.float_atanh(constraint),
+            "float_cos" => self.float_variable_assigner.float_cos(constraint),
+            "float_cosh" => self.float_variable_assigner.float_cosh(constraint),
+            "float_exp" => self.float_variable_assigner.float_exp(constraint),
+            "float_lin_eq" => self
                 .float_variable_assigner
-                .array_float_element(constraint, &self.complete_solution),
-            "float_abs" => self
-                .float_variable_assigner
-                .float_abs(constraint, &self.complete_solution),
-            "float_div" => self
-                .float_variable_assigner
-                .float_div(constraint, &self.complete_solution),
-            "float_eq" => self
-                .float_variable_assigner
-                .float_eq(constraint, &self.complete_solution),
-            "float_max" => self
-                .float_variable_assigner
-                .float_max(constraint, &self.complete_solution),
-            "float_min" => self
-                .float_variable_assigner
-                .float_min(constraint, &self.complete_solution),
-            "float_plus" => self
-                .float_variable_assigner
-                .float_plus(constraint, &self.complete_solution),
-            "float_pow" => self
-                .float_variable_assigner
-                .float_pow(constraint, &self.complete_solution),
-            "float_times" => self
-                .float_variable_assigner
-                .float_times(constraint, &self.complete_solution),
-            "float_acos" => self
-                .float_variable_assigner
-                .float_acos(constraint, &self.complete_solution),
-            "float_acosh" => self
-                .float_variable_assigner
-                .float_acosh(constraint, &self.complete_solution),
-            "float_asin" => self
-                .float_variable_assigner
-                .float_asin(constraint, &self.complete_solution),
-            "float_asinh" => self
-                .float_variable_assigner
-                .float_asinh(constraint, &self.complete_solution),
-            "float_atan" => self
-                .float_variable_assigner
-                .float_atan(constraint, &self.complete_solution),
-            "float_atanh" => self
-                .float_variable_assigner
-                .float_atanh(constraint, &self.complete_solution),
-            "float_cos" => self
-                .float_variable_assigner
-                .float_cos(constraint, &self.complete_solution),
-            "float_cosh" => self
-                .float_variable_assigner
-                .float_cosh(constraint, &self.complete_solution),
-            "float_exp" => self
-                .float_variable_assigner
-                .float_exp(constraint, &self.complete_solution),
-            "float_lin_eq" => self.float_variable_assigner.float_lin_eq(
-                constraint,
-                &self.complete_solution,
-                variable,
-            ),
-            "float_ln" => self
-                .float_variable_assigner
-                .float_ln(constraint, &self.complete_solution),
-            "float_log10" => self
-                .float_variable_assigner
-                .float_log10(constraint, &self.complete_solution),
-            "float_log2" => self
-                .float_variable_assigner
-                .float_log2(constraint, &self.complete_solution),
-            "float_sin" => self
-                .float_variable_assigner
-                .float_sin(constraint, &self.complete_solution),
-            "float_sinh" => self
-                .float_variable_assigner
-                .float_sinh(constraint, &self.complete_solution),
-            "float_sqrt" => self
-                .float_variable_assigner
-                .float_sqrt(constraint, &self.complete_solution),
-            "float_tan" => self
-                .float_variable_assigner
-                .float_tan(constraint, &self.complete_solution),
-            "float_tanh" => self
-                .float_variable_assigner
-                .float_tanh(constraint, &self.complete_solution),
-            "int2float" => self
-                .float_variable_assigner
-                .int2float(constraint, &self.complete_solution),
+                .float_lin_eq(constraint, variable),
+            "float_ln" => self.float_variable_assigner.float_ln(constraint),
+            "float_log10" => self.float_variable_assigner.float_log10(constraint),
+            "float_log2" => self.float_variable_assigner.float_log2(constraint),
+            "float_sin" => self.float_variable_assigner.float_sin(constraint),
+            "float_sinh" => self.float_variable_assigner.float_sinh(constraint),
+            "float_sqrt" => self.float_variable_assigner.float_sqrt(constraint),
+            "float_tan" => self.float_variable_assigner.float_tan(constraint),
+            "float_tanh" => self.float_variable_assigner.float_tanh(constraint),
+            "int2float" => self.float_variable_assigner.int2float(constraint),
             _ => panic!("Unhandled float constraint {}", constraint.call.id),
         }
     }
@@ -287,105 +253,41 @@ impl VariableAssigner {
         _variable: &String,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_bool_and" => self
-                .bool_variable_assigner
-                .array_bool_and(constraint, &self.complete_solution),
-            "array_bool_element" | "array_var_bool_element" => self
-                .bool_variable_assigner
-                .array_bool_element(constraint, &self.complete_solution),
-            "bool_and" => self
-                .bool_variable_assigner
-                .bool_and(constraint, &self.complete_solution),
-            "bool_clause" => self
-                .bool_variable_assigner
-                .bool_clause(constraint, &self.complete_solution),
-            "bool_eq" => self
-                .bool_variable_assigner
-                .bool_eq(constraint, &self.complete_solution),
-            "bool_not" => self
-                .bool_variable_assigner
-                .bool_not(constraint, &self.complete_solution),
-            "bool_eq_reif" => self
-                .bool_variable_assigner
-                .bool_eq_reif(constraint, &self.complete_solution),
-            "bool_le_reif" => self
-                .bool_variable_assigner
-                .bool_le_reif(constraint, &self.complete_solution),
-            "bool_lt_reif" => self
-                .bool_variable_assigner
-                .bool_lt_reif(constraint, &self.complete_solution),
-            "bool_or" => self
-                .bool_variable_assigner
-                .bool_or(constraint, &self.complete_solution),
-            "bool_xor" => self
-                .bool_variable_assigner
-                .bool_xor(constraint, &self.complete_solution),
-            "float_eq_reif" => self
-                .float_variable_assigner
-                .float_eq_reif(constraint, &self.complete_solution),
-            "float_le_reif" => self
-                .float_variable_assigner
-                .float_le_reif(constraint, &self.complete_solution),
-            "float_lin_eq_reif" => self
-                .float_variable_assigner
-                .float_lin_eq_reif(constraint, &self.complete_solution),
-            "float_lin_le_reif" => self
-                .float_variable_assigner
-                .float_lin_le_reif(constraint, &self.complete_solution),
-            "float_lin_ne_reif" => self
-                .float_variable_assigner
-                .float_lin_ne_reif(constraint, &self.complete_solution),
-            "float_lin_lt_reif" => self
-                .float_variable_assigner
-                .float_lin_lt_reif(constraint, &self.complete_solution),
-            "float_lt_reif" => self
-                .float_variable_assigner
-                .float_lt_reif(constraint, &self.complete_solution),
-            "float_ne_reif" => self
-                .float_variable_assigner
-                .float_ne_reif(constraint, &self.complete_solution),
-            "int_eq_reif" => self
-                .int_variable_assigner
-                .int_eq_reif(constraint, &self.complete_solution),
-            "int_le_reif" => self
-                .int_variable_assigner
-                .int_le_reif(constraint, &self.complete_solution),
-            "int_lin_eq_reif" => self
-                .int_variable_assigner
-                .int_lin_eq_reif(constraint, &self.complete_solution),
-            "int_lin_le_reif" => self
-                .int_variable_assigner
-                .int_lin_le_reif(constraint, &self.complete_solution),
-            "int_lin_ne_reif" => self
-                .int_variable_assigner
-                .int_lin_ne_reif(constraint, &self.complete_solution),
-            "int_lt_reif" => self
-                .int_variable_assigner
-                .int_lt_reif(constraint, &self.complete_solution),
-            "int_ne_reif" => self
-                .int_variable_assigner
-                .int_ne_reif(constraint, &self.complete_solution),
-            "set_eq_reif" => self
-                .set_variable_assigner
-                .set_eq_reif(constraint, &self.complete_solution),
-            "set_in_reif" => self
-                .set_variable_assigner
-                .set_in_reif(constraint, &self.complete_solution),
-            "set_le_reif" => self
-                .set_variable_assigner
-                .set_le_reif(constraint, &self.complete_solution),
-            "set_lt_reif" => self
-                .set_variable_assigner
-                .set_lt_reif(constraint, &self.complete_solution),
-            "set_ne_reif" => self
-                .set_variable_assigner
-                .set_ne_reif(constraint, &self.complete_solution),
-            "set_subset_reif" => self
-                .set_variable_assigner
-                .set_subset_reif(constraint, &self.complete_solution),
-            "set_superset_reif" => self
-                .set_variable_assigner
-                .set_superset_reif(constraint, &self.complete_solution),
+            "array_bool_and" => self.bool_variable_assigner.array_bool_and(constraint),
+            "array_bool_element" | "array_var_bool_element" => {
+                self.bool_variable_assigner.array_bool_element(constraint)
+            }
+            "bool_and" => self.bool_variable_assigner.bool_and(constraint),
+            "bool_clause" => self.bool_variable_assigner.bool_clause(constraint),
+            "bool_eq" => self.bool_variable_assigner.bool_eq(constraint),
+            "bool_not" => self.bool_variable_assigner.bool_not(constraint),
+            "bool_eq_reif" => self.bool_variable_assigner.bool_eq_reif(constraint),
+            "bool_le_reif" => self.bool_variable_assigner.bool_le_reif(constraint),
+            "bool_lt_reif" => self.bool_variable_assigner.bool_lt_reif(constraint),
+            "bool_or" => self.bool_variable_assigner.bool_or(constraint),
+            "bool_xor" => self.bool_variable_assigner.bool_xor(constraint),
+            "float_eq_reif" => self.float_variable_assigner.float_eq_reif(constraint),
+            "float_le_reif" => self.float_variable_assigner.float_le_reif(constraint),
+            "float_lin_eq_reif" => self.float_variable_assigner.float_lin_eq_reif(constraint),
+            "float_lin_le_reif" => self.float_variable_assigner.float_lin_le_reif(constraint),
+            "float_lin_ne_reif" => self.float_variable_assigner.float_lin_ne_reif(constraint),
+            "float_lin_lt_reif" => self.float_variable_assigner.float_lin_lt_reif(constraint),
+            "float_lt_reif" => self.float_variable_assigner.float_lt_reif(constraint),
+            "float_ne_reif" => self.float_variable_assigner.float_ne_reif(constraint),
+            "int_eq_reif" => self.int_variable_assigner.int_eq_reif(constraint),
+            "int_le_reif" => self.int_variable_assigner.int_le_reif(constraint),
+            "int_lin_eq_reif" => self.int_variable_assigner.int_lin_eq_reif(constraint),
+            "int_lin_le_reif" => self.int_variable_assigner.int_lin_le_reif(constraint),
+            "int_lin_ne_reif" => self.int_variable_assigner.int_lin_ne_reif(constraint),
+            "int_lt_reif" => self.int_variable_assigner.int_lt_reif(constraint),
+            "int_ne_reif" => self.int_variable_assigner.int_ne_reif(constraint),
+            "set_eq_reif" => self.set_variable_assigner.set_eq_reif(constraint),
+            "set_in_reif" => self.set_variable_assigner.set_in_reif(constraint),
+            "set_le_reif" => self.set_variable_assigner.set_le_reif(constraint),
+            "set_lt_reif" => self.set_variable_assigner.set_lt_reif(constraint),
+            "set_ne_reif" => self.set_variable_assigner.set_ne_reif(constraint),
+            "set_subset_reif" => self.set_variable_assigner.set_subset_reif(constraint),
+            "set_superset_reif" => self.set_variable_assigner.set_superset_reif(constraint),
 
             _ => panic!("Unhandled bool constraint {}", constraint.call.id),
         }
@@ -397,24 +299,16 @@ impl VariableAssigner {
         _variable: &String,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> HashSet<i64> + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_set_element" | "array_var_set_element" => self
-                .set_variable_assigner
-                .array_set_element(&constraint, &self.complete_solution),
-            "set_diff" => self
-                .set_variable_assigner
-                .set_diff(constraint, &self.complete_solution),
-            "set_eq" => self
-                .set_variable_assigner
-                .set_eq(constraint, &self.complete_solution),
-            "set_intersect" => self
-                .set_variable_assigner
-                .set_intersect(constraint, &self.complete_solution),
+            "array_set_element" | "array_var_set_element" => {
+                self.set_variable_assigner.array_set_element(&constraint)
+            }
+            "set_diff" => self.set_variable_assigner.set_diff(constraint),
+            "set_eq" => self.set_variable_assigner.set_eq(constraint),
+            "set_intersect" => self.set_variable_assigner.set_intersect(constraint),
             "set_symdiff" => self
                 .set_variable_assigner
-                .set_symmetric_difference(constraint, &self.complete_solution),
-            "set_union" => self
-                .set_variable_assigner
-                .set_union(constraint, &self.complete_solution),
+                .set_symmetric_difference(constraint),
+            "set_union" => self.set_variable_assigner.set_union(constraint),
             _ => panic!("Unhandled set constraint {}", constraint.call.id),
         }
     }

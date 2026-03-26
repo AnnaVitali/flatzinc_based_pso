@@ -8,15 +8,31 @@ use crate::args_extractor::args_extractor::ArgsExtractor;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 
 #[derive(Clone, Debug, Default)]
+/// A struct representing an invariant graph, which captures the dependencies between constraints and variables in a FlatZinc model.
+/// The graph is directed, where edges represent the flow of information from variables to constraints and from constraints to defined variables.
 pub struct InvariantGraph {
+    /// The underlying graph structure from the `petgraph` library, where nodes represent either constraints or variables, and edges represent dependencies.
     graph: Graph<(), i32, Directed>,
-    index_map: HashMap<NodeIndex, usize>,            
+    /// A mapping from graph node indices to their corresponding constraint indices in the original constraints list, allowing for easy retrieval of constraint information.
+    index_map: HashMap<NodeIndex, usize>,
+    /// A mapping from variable names to their corresponding graph node indices, enabling quick access to variable nodes in the graph.            
     variables_map: HashMap<String, NodeIndex>,      
+    /// A vector of constraints with their defines, representing the original constraints from the FlatZinc model, stored for reference and retrieval during graph operations.
     constraints: Vec<CallWithDefines>,
 }
 
 impl InvariantGraph {
 
+    /// Builds an invariant graph from a list of constraints and a mapping of arrays, optionally saving the graph to a DOT file for visualization.
+    /// The graph is constructed by creating nodes for each constraint and variable, and edges are added to represent the dependencies between them based on the arguments of the constraints.
+    /// 
+    /// # Arguments
+    /// * `constraints` - A slice of `CallWithDefines` representing the constraints and
+    /// their defined variables from the FlatZinc model.
+    /// * `arrays` - A mapping from identifiers to arrays, used to resolve array references in constraint arguments when building the graph.
+    /// * `save` - A boolean flag indicating whether to save the generated graph to a DOT file for visualization purposes.
+    /// # Returns
+    /// An instance of `InvariantGraph` representing the dependencies between constraints and variables in the FlatZinc model.
     pub fn build(constraints: &[CallWithDefines], arrays: &HashMap<Identifier, Array>, save:bool) -> Self {
         let mut graph = Graph::<(), i32, Directed>::new();
         let mut constraint_nodes: Vec<NodeIndex> = Vec::with_capacity(constraints.len());
@@ -115,11 +131,22 @@ impl InvariantGraph {
         invariant_graph
     }
 
+    /// Returns the constraints in topologically sorted order based on the invariant graph, ensuring that constraints are ordered according to their dependencies.
+    /// This method uses the `toposort` algorithm from the `petgraph` library.
+    /// 
+    /// # Arguments
+    /// * `constraints` - A slice of `CallWithDefines` representing the constraints and their defined variables from the FlatZinc model.
+    /// # Returns
+    /// A vector of `CallWithDefines` representing the constraints in topologically sorted order according to their dependencies in the invariant graph.
     pub fn topologically_sorted_constraints(&self, constraints: &[CallWithDefines]) -> Vec<CallWithDefines> {
         let indices = self.topologically_sort_constraints_indices();
         indices.iter().map(|&i| constraints[i].clone()).collect()
     }
 
+    /// Exports the invariant graph to a DOT file for visualization. The DOT format is compatible with graph visualization tools like Graphviz.
+    /// 
+    /// # Arguments
+    /// * `file_path` - A string slice representing the path where the DOT file should be saved.
     pub fn export_dot(&self, file_path: &str) {
         let mut dot = String::from("digraph InvariantGraph {\n");
 

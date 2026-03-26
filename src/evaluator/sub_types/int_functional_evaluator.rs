@@ -492,6 +492,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_le` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_le(
         &self,
         constraint: &CallWithDefines,
@@ -565,6 +572,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_le_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_le_reif(
         &self,
         constraint: &CallWithDefines,
@@ -664,6 +678,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lin_eq` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_lin_eq(
         &self,
         constraint: &CallWithDefines,
@@ -722,6 +743,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lin_eq_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_eq_reif(
         &self,
         constraint: &CallWithDefines,
@@ -803,6 +831,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lin_le` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_lin_le(
         &self,
         constraint: &CallWithDefines,
@@ -860,6 +895,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lin_le_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_le_reif(
         &self,
         constraint: &CallWithDefines,
@@ -942,6 +984,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lin_ne` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_ne(
         &self,
         constraint: &CallWithDefines,
@@ -1001,6 +1050,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lin_ne_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_ne_reif(
         &self,
         constraint: &CallWithDefines,
@@ -1087,6 +1143,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lt` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_lt(
         &self,
         constraint: &CallWithDefines,
@@ -1160,6 +1223,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_lt_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lt_reif(
         &self,
         constraint: &CallWithDefines,
@@ -1260,6 +1330,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_max` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_max(
         &self,
         constraint: &CallWithDefines,
@@ -1337,6 +1414,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_min` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_min(
         &self,
         constraint: &CallWithDefines,
@@ -1414,6 +1498,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_mod` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_mod(
         &self,
         constraint: &CallWithDefines,
@@ -1470,6 +1561,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_ne` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_ne(
         &self,
         constraint: &CallWithDefines,
@@ -1513,6 +1611,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_ne_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_ne_reif(
         &self,
         constraint: &CallWithDefines,
@@ -1568,6 +1673,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_pow` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_pow(
         &self,
         constraint: &CallWithDefines,
@@ -1624,6 +1736,13 @@ impl IntFunctionalEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `int_times` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// * `solution` - The current solution map.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_times(
         &self,
         constraint: &CallWithDefines,

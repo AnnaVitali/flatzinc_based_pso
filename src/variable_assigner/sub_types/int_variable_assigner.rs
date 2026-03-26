@@ -10,13 +10,27 @@ use flatzinc_serde::{Array, Identifier};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
+/// Struct responsible for assigning integer variables based on constraints and solutions.
+///
+/// # Fields
+/// * `args_extractor` - Extracts arguments for integer constraints.
+/// * `arrays` - Stores arrays mapped by their identifiers.
 #[derive(Debug, Clone, Default)]
 pub struct IntVariableAssigner {
+    /// An instance of `IntArgsExtractor` used to extract arguments from integer constraints.
     args_extractor: IntArgsExtractor,
+    /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
     arrays: HashMap<Identifier, Array>,
 }
 
 impl IntVariableAssigner {
+    /// Creates a new `IntVariableAssigner` with the provided arrays.
+    ///
+    /// # Arguments
+    /// * `arrays` - A map from identifiers to arrays used in integer constraints.
+    ///
+    /// # Returns
+    /// A new instance of `IntVariableAssigner`.
     pub fn new(arrays: HashMap<Identifier, Array>) -> Self {
         let args_extractor = IntArgsExtractor::new();
 
@@ -26,10 +40,17 @@ impl IntVariableAssigner {
         }
     }
 
+    /// Returns a closure that evaluates the `array_int_element` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the integer value from the array or a specific value depending on the defined variable.
     pub fn array_int_element(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
@@ -48,10 +69,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_abs` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the absolute value of an integer or a specific value depending on the defined variable.
     pub fn int_abs(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -70,10 +98,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_div` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the division of two integer values or a specific value depending on the defined variable.
     pub fn int_div(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -93,10 +128,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_eq` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the equality of two integer values or a specific value depending on the defined variable.
     pub fn int_eq(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -114,10 +156,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_eq_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether two integer values are equal, or a boolean value depending on the defined variable.
     pub fn int_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -140,10 +189,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_le_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether one integer value is less than or equal to another, or a boolean value depending on the defined variable.
     pub fn int_le_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -166,10 +222,18 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_lin_eq` constraint for a specific variable.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    /// * `variable` - The variable to solve for in the linear equation.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the value of the specified variable in the linear equation.
     pub fn int_lin_eq(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
         variable: &String,
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
@@ -200,10 +264,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_lin_eq_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether the linear equation holds, or a boolean value depending on the defined variable.
     pub fn int_lin_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
@@ -249,10 +320,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_lin_le_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether the linear expression is less than or equal to the term, or a boolean value depending on the defined variable.
     pub fn int_lin_le_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
@@ -298,10 +376,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_lin_ne_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether the linear expression is not equal to the term, or a boolean value depending on the defined variable.
     pub fn int_lin_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let arrays = self.arrays.clone();
@@ -347,10 +432,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_lt_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether one integer value is less than another, or a boolean value depending on the defined variable.
     pub fn int_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -373,10 +465,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_max` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the maximum of two integer values or a specific value depending on the defined variable.
     pub fn int_max(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -396,10 +495,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_min` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the minimum of two integer values or a specific value depending on the defined variable.
     pub fn int_min(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -419,10 +525,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_mod` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the remainder of the division of two integer values or a specific value depending on the defined variable.
     pub fn int_mod(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -442,10 +555,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_ne_reif` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns whether two integer values are not equal, or a boolean value depending on the defined variable.
     pub fn int_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -468,10 +588,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_pow` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the result of raising one integer to the power of another or a specific value depending on the defined variable.
     pub fn int_pow(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
@@ -491,10 +618,17 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `int_times` constraint.
+    ///
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    ///
+    /// # Returns
+    /// A closure that, given a solution, returns the product of two integer values or a specific value depending on the defined variable.
     pub fn int_times(
         &self,
         constraint: &CallWithDefines,
-        _solution: &HashMap<String, VariableValue>,
+        
     ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();

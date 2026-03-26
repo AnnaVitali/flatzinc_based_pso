@@ -16,27 +16,44 @@ use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
+/// A struct representing a constraint call along with its defines (if any).
 pub struct CallWithDefines {
     pub(crate) id: usize,
     pub(crate) call: Call,
     pub(crate) defines: Option<Identifier>,
 }
 #[derive(Clone, Default)]
+/// An evaluator for FlatZinc constraints that evaluates the constraints based on a provided solution map.
+/// This struct maintains the FlatZinc model, variable bounds, constraints, and functional evaluators for different types of constraints (float, int, bool, set).
+/// It also includes a variable assigner to assign values to defined variables based on the constraints and arrays in the model.
 pub struct MiniEvaluator {
+    /// The FlatZinc model being evaluated.
     fzn: FlatZinc,
+    /// A map from variable names to their (min, max) bounds as `VariableValue` pairs.
     variable_bounds: HashMap<String, (VariableValue, VariableValue)>,
+    /// A vector of constraints along with their defines (if any) to be evaluated.
     constraints: Vec<CallWithDefines>,
+    /// A vector of functional evaluators corresponding to the constraints, used to compute violation values.
     violation_functions: Vec<Arc<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync>>,
+    /// A flag to enable verbose logging during evaluation.
     verbose: bool,
+    /// A map from array identifiers to their corresponding `Array` definitions from the FlatZinc model.
     arrays_hashmap: HashMap<Identifier, Array>,
+    /// Functional evaluators for different types of constraints (float, int, bool, set) that provide methods to evaluate specific constraint types.
     float_functional_evaluator: FloatFunctionalEvaluator,
+    /// Functional evaluator for integer constraints.
     int_functional_evaluator: IntFunctionalEvaluator,
+    /// Functional evaluator for boolean constraints.
     bool_functional_evaluator: BoolFunctionalEvaluator,
+    /// Functional evaluator for set constraints.
     set_functional_evaluator: SetFunctionalEvaluator,
+    /// A variable assigner that assigns values to defined variables based on the constraints and arrays in the model.
     variable_assigner: VariableAssigner,
+    /// The current solution map that is being evaluated, mapping variable names to their assigned values.
     solution: HashMap<String, VariableValue>,
 }
 
+/// Custom implementation of the `Debug` trait for `MiniEvaluator` to provide a more concise and relevant debug output.
 impl fmt::Debug for MiniEvaluator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FunctionalEvaluator")
@@ -49,7 +66,10 @@ impl fmt::Debug for MiniEvaluator {
     }
 }
 
+/// Implementation of the `MiniEvaluator` struct, providing methods to create a new evaluator,
+///  evaluate constraints based on a solution provider, and populate violation functions for the constraints.
 impl MiniEvaluator {
+    /// Creates a new `MiniEvaluator` instance by loading constraints from the provided FlatZinc model and building an invariant graph.
     pub fn new(path: &Path, fzn: FlatZinc, option: Option<&str>) -> Self {
         let mut constraints = Self::load_constraints_with_defines(path, &fzn);
         let arrays_hashmap: HashMap<Identifier, Array> = fzn
@@ -111,6 +131,13 @@ impl MiniEvaluator {
         evaluator
     }
 
+    /// Evaluates the constraints based on the provided solution map from the `SolutionProvider`, returning the objective value (if any) and the total violation value.
+     ///
+     /// # Arguments
+     /// * `solution_provider` - A reference to a `SolutionProvider` that provides the current solution map for evaluation.
+     ///
+     /// # Returns
+     /// A tuple containing an optional objective value (as `f64`) and the total violation value (as `f64`), which is the sum of constraint violations and domain violations.
     pub fn evaluate_invariants_graph(
         &mut self,
         solution_provider: &SolutionProvider,
