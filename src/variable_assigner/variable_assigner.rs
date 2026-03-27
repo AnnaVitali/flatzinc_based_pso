@@ -6,7 +6,7 @@ use crate::variable_assigner::sub_types::float_variable_assigner::FloatVariableA
 use crate::variable_assigner::sub_types::int_variable_assigner::IntVariableAssigner;
 use crate::variable_assigner::sub_types::set_variable_assigner::SetVariableAssigner;
 
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -30,7 +30,7 @@ pub struct VariableAssigner {
     /// A hashmap that represents the complete solution, mapping variable names to their assigned values. This is updated as variables are assigned.
     complete_solution: HashMap<String, VariableValue>,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints when building assigned functions.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
     /// An instance of `IntVariableAssigner` used to build functions for assigning integer variables based on integer constraints.
     int_variable_assigner: IntVariableAssigner,
     /// An instance of `FloatVariableAssigner` used to build functions for assigning float variables based on float constraints.
@@ -76,7 +76,7 @@ impl VariableAssigner {
     pub fn new(
         defined_variable: Vec<String>,
         constraints: Vec<CallWithDefines>,
-        arrays: HashMap<Identifier, Array>,
+        arrays: HashMap<String, Array>,
     ) -> Self {
         Self {
             defined_variable,

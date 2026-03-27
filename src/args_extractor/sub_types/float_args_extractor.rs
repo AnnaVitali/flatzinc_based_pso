@@ -1,6 +1,6 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Argument, Array, Call, Identifier, Literal};
+use flatzinc_serde::{Argument, Array, Constraint, Literal};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
@@ -53,8 +53,8 @@ impl FloatArgsExtractor {
     /// The extracted float value from the array element.
     pub fn extract_float_element_in_array(
         &self,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
         solution: &HashMap<String, VariableValue>,
     ) -> f64 {
         let idx = self
@@ -91,7 +91,7 @@ impl FloatArgsExtractor {
     pub fn extract_float_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> f64 {
         let literal = self.args_extractor.extract_term(constraint, index);
@@ -119,7 +119,7 @@ impl FloatArgsExtractor {
     pub fn extract_bool_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> bool {
         self.args_extractor.extract_bool_value(
@@ -140,7 +140,7 @@ impl FloatArgsExtractor {
     pub fn extract_int_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         self.args_extractor.extract_int_value(
@@ -161,8 +161,8 @@ impl FloatArgsExtractor {
     pub fn extract_float_coefficients_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
     ) -> Vec<f64> {
         let coeff: Vec<f64> = constraint
             .args
@@ -208,9 +208,9 @@ impl FloatArgsExtractor {
     pub fn extract_var_values_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
-    ) -> Vec<Identifier> {
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
+    ) -> Vec<String> {
         self.args_extractor
             .extract_var_values_lin_expr(index, constraint, arrays)
     }

@@ -2,7 +2,7 @@ use crate::args_extractor::sub_types::bool_args_extractor::BoolArgsExtractor;
 use crate::data_utility::logger::write_verbose_output;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use log::info;
 use std::collections::HashMap;
 
@@ -20,7 +20,7 @@ pub const COEFF_LIN_CONSTR_INDEX: usize = 0;
 #[derive(Debug, Clone, Default)]
 pub struct BoolEvaluator {
     /// Map of array identifiers to their values.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
     /// Helper for extracting boolean arguments from constraints.
     args_extractor: BoolArgsExtractor,
     /// If true, enables verbose logging of constraint violations.
@@ -36,7 +36,7 @@ impl BoolEvaluator {
     ///
     /// # Returns
     /// A new `BoolFunctionalEvaluator` instance.
-    pub fn new(arrays: HashMap<Identifier, Array>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, verbose: bool) -> Self {
         let args_extractor = BoolArgsExtractor::new();
         Self {
             arrays,
@@ -1636,7 +1636,7 @@ impl BoolEvaluator {
 
     fn identifier_from_vars(
         &self,
-        vars: &HashMap<i64, Identifier>,
+        vars: &HashMap<i64, String>,
         index: usize,
     ) -> Option<String> {
         vars.get(&(index as i64)).map(|id| id.to_string())

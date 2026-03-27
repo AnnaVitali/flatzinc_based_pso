@@ -4,7 +4,7 @@ use crate::evaluator::sub_types::bool_evaluator::{
     A_TERM_INDEX, AS_ARRAY_INDEX, B_TERM_INDEX, BS_ARRAY_INDEX, C_TERM_INDEX,
 };
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use std::collections::HashMap;
 
 /// Struct responsible for assigning boolean variables based on constraints and solutions.
@@ -17,7 +17,7 @@ pub struct BoolVariableAssigner {
     /// An instance of `BoolArgsExtractor` used to extract arguments from boolean constraints.
     args_extractor: BoolArgsExtractor,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
 }
 
 impl BoolVariableAssigner {
@@ -28,7 +28,7 @@ impl BoolVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `BoolVariableAssigner`.
-    pub fn new(arrays: HashMap<Identifier, Array>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>) -> Self {
         let args_extractor = BoolArgsExtractor::new();
 
         Self {

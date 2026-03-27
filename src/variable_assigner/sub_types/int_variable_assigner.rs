@@ -6,7 +6,7 @@ use crate::evaluator::sub_types::int_evaluator::{
     R_TERM_INDEX, VARS_LIN_CONSTR_INDEX,
 };
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 
@@ -20,7 +20,7 @@ pub struct IntVariableAssigner {
     /// An instance of `IntArgsExtractor` used to extract arguments from integer constraints.
     args_extractor: IntArgsExtractor,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
 }
 
 impl IntVariableAssigner {
@@ -31,7 +31,7 @@ impl IntVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `IntVariableAssigner`.
-    pub fn new(arrays: HashMap<Identifier, Array>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>) -> Self {
         let args_extractor = IntArgsExtractor::new();
 
         Self {

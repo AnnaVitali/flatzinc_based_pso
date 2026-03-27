@@ -1,5 +1,5 @@
 use crate::ozn_parser::ozn_parser::{OznMapping, OznParser};
-use flatzinc_serde::{Array, Domain, FlatZinc, Identifier, Literal, Type};
+use flatzinc_serde::{Array, Domain, FlatZinc, Literal, Type};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -18,9 +18,9 @@ pub struct SolutionProvider {
     /// A hashmap that maps variable names to their corresponding string references in the case of array elements.
     array_elements_map: HashMap<String, String>,
     /// A vector of identifiers representing the output variables specified in the FlatZinc model..
-    output: Vec<Identifier>,
+    output: Vec<String>,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references when providing solutions for array variables.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
     /// An instance of `OznParser` used to parse .ozn files and map output variables to their sources.
     ozn_parser: OznParser,
 }
@@ -32,7 +32,7 @@ impl SolutionProvider {
     pub fn new(fzn: FlatZinc, ozn: &Path) -> Self {
         let mut tobe_defined_vars_map = HashMap::new();
         let array_elements_map = HashMap::new();
-        let arrays: HashMap<Identifier, Array> = fzn.arrays
+        let arrays: HashMap<String, Array> = fzn.arrays
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
@@ -291,7 +291,7 @@ impl SolutionProvider {
 
         for (id, elem) in array_fzn.contents.iter().enumerate() {
             if let Literal::Identifier(var_fzn_name) = elem {
-                let val = value
+                let val: &HashSet<i64> = value
                     .get(id)
                     .expect("Provided value vector is shorter than the array length");
 

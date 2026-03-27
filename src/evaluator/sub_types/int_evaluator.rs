@@ -1,6 +1,6 @@
 use crate::args_extractor::sub_types::int_args_extractor::IntArgsExtractor;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use crate::data_utility::logger::write_verbose_output;
 use log::info;
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ pub const CONST_LIN_CONSTR_INDEX: usize = 2;
 /// and arithmetic operations. It uses argument extraction utilities and supports verbose output for debugging.
 pub struct IntEvaluator {
     /// A map of identifiers to arrays used in constraint evaluation.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
     /// An extractor for integer arguments from constraints.
     args_extractor: IntArgsExtractor,
     /// A flag to enable verbose output for debugging purposes.
@@ -39,7 +39,7 @@ impl IntEvaluator {
     ///
     /// # Returns
     /// A new `IntFunctionalEvaluator` instance.
-    pub fn new(arrays: HashMap<Identifier, Array>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, verbose: bool) -> Self {
         let args_extractor = IntArgsExtractor::new();
         Self {
             arrays,
@@ -1804,7 +1804,7 @@ impl IntEvaluator {
         verbose: bool,
         coeff: &Vec<i64>,
         solution: &HashMap<String, VariableValue>,
-        vars_involved: &Vec<Identifier>,
+        vars_involved: &Vec<String>,
         verbose_terms: &mut String,
     ) -> i64 {
         let left_side_term: i64 = coeff
@@ -1831,7 +1831,7 @@ impl IntEvaluator {
 
     fn identifier_from_vars(
         &self,
-        vars: &HashMap<i64, Identifier>,
+        vars: &HashMap<i64, String>,
         index: usize,
     ) -> Option<String> {
         vars.get(&(index as i64)).map(|id| id.to_string())

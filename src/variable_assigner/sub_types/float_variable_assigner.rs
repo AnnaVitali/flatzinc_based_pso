@@ -6,7 +6,7 @@ use crate::evaluator::sub_types::float_evaluator::{
     R_TERM_INDEX, VARS_LIN_CONSTR_INDEX,
 };
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use std::collections::HashMap;
 
 /// Struct responsible for assigning float variables based on constraints and solutions.
@@ -19,7 +19,7 @@ pub struct FloatVariableAssigner {
     /// An instance of `FloatArgsExtractor` used to extract arguments from float constraints.
     args_extractor: FloatArgsExtractor,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
 }
 
 impl FloatVariableAssigner {
@@ -30,7 +30,7 @@ impl FloatVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `FloatVariableAssigner`.
-    pub fn new(arrays: HashMap<Identifier, Array>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>) -> Self {
         let args_extractor = FloatArgsExtractor::new();
 
         Self {

@@ -6,7 +6,7 @@ use crate::invariant_graph::InvariantGraph;
 use crate::solution_provider::{SolutionProvider, VariableValue};
 use crate::variable_assigner::variable_assigner::VariableAssigner;
 use env_logger::Env;
-use flatzinc_serde::{Array, Call, Domain, FlatZinc, Identifier, Literal, Type};
+use flatzinc_serde::{Array, Constraint, Domain, FlatZinc, Literal, Type};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
@@ -19,8 +19,8 @@ use std::sync::Arc;
 /// A struct representing a constraint call along with its defines (if any).
 pub struct CallWithDefines {
     pub(crate) id: usize,
-    pub(crate) call: Call,
-    pub(crate) defines: Option<Identifier>,
+    pub(crate) call: Constraint,
+    pub(crate) defines: Option<String>,
 }
 #[derive(Clone, Default)]
 /// An evaluator for FlatZinc constraints that evaluates the constraints based on a provided solution map.
@@ -38,7 +38,7 @@ pub struct MiniEvaluator {
     /// A flag to enable verbose logging during evaluation.
     verbose: bool,
     /// A map from array identifiers to their corresponding `Array` definitions from the FlatZinc model.
-    arrays_hashmap: HashMap<Identifier, Array>,
+    arrays_hashmap: HashMap<String, Array>,
     /// Functional evaluators for different types of constraints (float, int, bool, set) that provide methods to evaluate specific constraint types.
     float_functional_evaluator: FloatEvaluator,
     /// Functional evaluator for integer constraints.
@@ -72,7 +72,7 @@ impl MiniEvaluator {
     /// Creates a new `MiniEvaluator` instance by loading constraints from the provided FlatZinc model and building an invariant graph.
     pub fn new(path: &Path, fzn: FlatZinc, option: Option<&str>) -> Self {
         let mut constraints = Self::load_constraints_with_defines(path, &fzn);
-        let arrays_hashmap: HashMap<Identifier, Array> = fzn
+        let arrays_hashmap: HashMap<String, Array> = fzn
             .arrays
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -820,7 +820,7 @@ impl MiniEvaluator {
             }
         };
 
-        let defines_vec: Vec<Option<Identifier>> = raw
+        let defines_vec: Vec<Option<String>> = raw
             .get("constraints")
             .and_then(|c| c.as_array())
             .map(|arr| {

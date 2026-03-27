@@ -1,6 +1,6 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Argument, Array, Call, Identifier, Literal};
+use flatzinc_serde::{Argument, Array, Constraint, Literal};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
@@ -58,7 +58,7 @@ impl BoolArgsExtractor {
     pub fn extract_bool_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> bool {
         self.args_extractor.extract_bool_value(
@@ -79,7 +79,7 @@ impl BoolArgsExtractor {
     pub fn extract_int_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         self.args_extractor.extract_int_value(
@@ -101,8 +101,8 @@ impl BoolArgsExtractor {
     pub fn extract_bool_element_array(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
         solution: &HashMap<String, VariableValue>,
     ) -> bool {
         let idx = self.args_extractor.extract_int_value(
@@ -142,8 +142,8 @@ impl BoolArgsExtractor {
     pub fn extract_bool_defined_elements_array(
         &self,
         index: usize,
-        arrays: &HashMap<Identifier, Array>,
-        constraint: &Call,
+        arrays: &HashMap<String, Array>,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> Vec<bool> {
         let elements = constraint
@@ -227,8 +227,8 @@ impl BoolArgsExtractor {
     pub fn extract_bool_array(
         &self,
         index: usize,
-        arrays: &HashMap<Identifier, Array>,
-        constraint: &Call,
+        arrays: &HashMap<String, Array>,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> Vec<bool> {
         let elements = constraint
@@ -298,8 +298,8 @@ impl BoolArgsExtractor {
     pub fn extract_int_coefficients_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
     ) -> Vec<i64> {
         self.args_extractor
             .extract_int_coefficients_lin_expr(index, constraint, arrays)
@@ -312,7 +312,7 @@ impl BoolArgsExtractor {
     ///
     /// # Returns
     /// The integer constant term from the linear expression.
-    pub fn extract_int_constant_term_lin_expr(&self, constraint: &Call) -> i64 {
+    pub fn extract_int_constant_term_lin_expr(&self, constraint: &Constraint) -> i64 {
         self.args_extractor
             .extract_int_constant_term_lin_expr(constraint)
     }

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use flatzinc_serde::Identifier;
 use crate::solution_provider::VariableValue;
 
 /// Computes the left-hand side value of an integer linear expression given coefficients, variable identifiers, and a solution map.
@@ -13,7 +12,7 @@ use crate::solution_provider::VariableValue;
 /// The computed integer value of the linear expression.
 pub fn int_lin_left_term(
     coeff: Vec<i64>,
-    vars_involved: Vec<Identifier>,
+    vars_involved: Vec<String>,
     complete_solution: &HashMap<String, VariableValue>,
 ) -> i64 {
     let left_side_term: i64 = coeff
@@ -45,7 +44,7 @@ pub fn int_lin_left_term(
 /// The computed float value of the linear expression.
 pub fn float_lin_left_term(
     coeff: Vec<f64>,
-    vars_involved: Vec<Identifier>,
+    vars_involved: Vec<String>,
     complete_solution: &HashMap<String, VariableValue>,
 ) -> f64 {
     let left_side_term: f64 = coeff

@@ -1,4 +1,4 @@
-use flatzinc_serde::{Array, Identifier, Literal};
+use flatzinc_serde::{Array, Literal};
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::algo::toposort;
 use petgraph::Directed;
@@ -33,7 +33,7 @@ impl InvariantGraph {
     /// * `save` - A boolean flag indicating whether to save the generated graph to a DOT file for visualization purposes.
     /// # Returns
     /// An instance of `InvariantGraph` representing the dependencies between constraints and variables in the FlatZinc model.
-    pub fn build(constraints: &[CallWithDefines], arrays: &HashMap<Identifier, Array>, save:bool) -> Self {
+    pub fn build(constraints: &[CallWithDefines], arrays: &HashMap<String, Array>, save:bool) -> Self {
         let mut graph = Graph::<(), i32, Directed>::new();
         let mut constraint_nodes: Vec<NodeIndex> = Vec::with_capacity(constraints.len());
         let mut variables_map: HashMap<String, NodeIndex> = HashMap::new();
@@ -56,10 +56,10 @@ impl InvariantGraph {
                 variables_map.entry(defined_var.clone()).or_insert_with(|| graph.add_node(()));
             }
             for arg_var in &argument_variable_ids {
-                let identifier = Identifier::from(arg_var.as_str());
+                let identifier = arg_var.as_str();
                 
                 //Create nodes for its contents instead of the array itself
-                if let Some(array) = arrays.get(&identifier) {
+                if let Some(array) = arrays.get(&identifier.to_string()) {
                     for arg in &array.contents {
                         if let Literal::Identifier(id) = arg {
                             variables_map.entry(id.to_string()).or_insert_with(|| graph.add_node(()));
@@ -80,10 +80,10 @@ impl InvariantGraph {
             let mut seen_input_nodes: HashSet<NodeIndex> = HashSet::new();
 
             for variable_name in &argument_variable_ids_per_constraint[constraint_index] {
-                let identifier = Identifier::from(variable_name.as_str());
+                let identifier = variable_name.as_str();
                 
                 // If this is an array, create edges to its contents
-                if let Some(array) = arrays.get(&identifier) {
+                if let Some(array) = arrays.get(&identifier.to_string()) {
                     for arg in &array.contents {
                         if let Literal::Identifier(id) = arg {
                             if constraint.defines.as_deref() == Some(id.as_str()) {

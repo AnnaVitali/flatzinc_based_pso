@@ -1,6 +1,6 @@
 use crate::{args_extractor::sub_types::float_args_extractor::FloatArgsExtractor, data_utility::logger::write_verbose_output};
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use log::info;
 use std::collections::HashMap;
 use crate::evaluator::mini_evaluator::CallWithDefines;
@@ -21,7 +21,7 @@ pub const FLOAT_EQ_TOLERANCE: f64 = 1e-4;
 #[derive(Debug, Clone, Default)]
 pub struct FloatEvaluator {
     /// Map of array identifiers to their values.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
     /// Helper for extracting float arguments from constraints.
     args_extractor: FloatArgsExtractor,
     /// If true, enables verbose logging of constraint violations.
@@ -38,7 +38,7 @@ impl FloatEvaluator {
     ///
     /// # Returns
     /// A new `FloatFunctionalEvaluator` instance.
-    pub fn new(arrays: HashMap<Identifier, Array>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, verbose: bool) -> Self {
         let args_extractor = FloatArgsExtractor::new();
         Self {
             arrays,
@@ -3738,7 +3738,7 @@ impl FloatEvaluator {
         verbose: bool,
         coeff: &Vec<f64>,
         solution: &HashMap<String, VariableValue>,
-        vars_involved: &Vec<Identifier>,
+        vars_involved: &Vec<String>,
         verbose_terms: &mut String,
     ) -> f64 {
         let left_side_term: f64 = coeff
@@ -3764,7 +3764,7 @@ impl FloatEvaluator {
     }
 
     #[inline]
-    fn identifier_from_vars(&self, vars: &HashMap<i64, Identifier>, index: usize) -> Option<String> {
+    fn identifier_from_vars(&self, vars: &HashMap<i64, String>, index: usize) -> Option<String> {
         vars.get(&(index as i64)).map(|id| id.to_string())
     }
 }

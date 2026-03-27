@@ -4,7 +4,7 @@ use crate::evaluator::sub_types::set_evaluator::{
     ARRAY_INDEX, X_TERM_INDEX, Y_TERM_INDEX,
 };
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use std::collections::{HashMap, HashSet};
 
 /// Struct responsible for assigning set variables based on constraints and solutions.
@@ -17,7 +17,7 @@ pub struct SetVariableAssigner {
     /// An instance of `SetArgsExtractor` used to extract arguments from set constraints.
     args_extractor: SetArgsExtractor,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
 }
 
 impl SetVariableAssigner {
@@ -28,7 +28,7 @@ impl SetVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `SetVariableAssigner`.
-    pub fn new(arrays: HashMap<Identifier, Array>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>) -> Self {
         let args_extractor = SetArgsExtractor::new();
 
         Self {

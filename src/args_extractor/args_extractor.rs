@@ -1,5 +1,5 @@
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Argument, Array, Call, Identifier, Literal};
+use flatzinc_serde::{Argument, Array, Constraint, Literal};
 use std::collections::HashMap;
 
 pub const ARRAY_IDX_INDEX: usize = 0;
@@ -115,10 +115,10 @@ impl ArgsExtractor {
     pub fn extract_var_values_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
-    ) -> Vec<Identifier> {
-        let vars_involved: Vec<Identifier> = constraint
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
+    ) -> Vec<String> {
+        let vars_involved: Vec<String> = constraint
             .args
             .get(index)
             .map(|arg| match arg {
@@ -166,8 +166,8 @@ impl ArgsExtractor {
     /// The extracted integer value from the array element.
     pub fn extract_int_array_element(
         &self,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         let idx = self.extract_int_value(self.extract_term(constraint, ARRAY_IDX_INDEX), solution);
@@ -202,8 +202,8 @@ impl ArgsExtractor {
     pub fn extract_int_coefficients_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
     ) -> Vec<i64> {
         let coeff: Vec<i64> = constraint
             .args
@@ -244,7 +244,7 @@ impl ArgsExtractor {
     ///
     /// # Returns
     /// The integer constant term from the linear expression.
-    pub fn extract_int_constant_term_lin_expr(&self, constraint: &Call) -> i64 {
+    pub fn extract_int_constant_term_lin_expr(&self, constraint: &Constraint) -> i64 {
         constraint
             .args
             .get(TERM_INDEX)
@@ -314,7 +314,7 @@ impl ArgsExtractor {
     ///
     /// # Returns
     /// The extracted `Literal` term.
-    pub fn extract_term(&self, constraint: &Call, index: usize) -> Literal {
+    pub fn extract_term(&self, constraint: &Constraint, index: usize) -> Literal {
         let arg = constraint
             .args
             .get(index)
@@ -336,8 +336,8 @@ impl ArgsExtractor {
     /// A reference to the extracted `Array`.
     pub fn extract_array<'a>(
         &self,
-        constraint: &Call,
-        arrays: &'a HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &'a HashMap<String, Array>,
     ) -> &'a Array {
         match self.extract_term(constraint, 1) {
             Literal::Identifier(id) => arrays.get(&id).unwrap_or_else(|| {

@@ -1,6 +1,6 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Argument, Array, Call, Identifier, Literal};
+use flatzinc_serde::{Argument, Array, Constraint, Literal};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]
@@ -45,7 +45,7 @@ impl SetArgsExtractor {
     pub fn extract_set_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> HashSet<i64> {
         let literal = self.args_extractor.extract_term(constraint, index);
@@ -83,7 +83,7 @@ impl SetArgsExtractor {
     pub fn extract_set_element(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         let elem = self.args_extractor.extract_int_value(
@@ -106,7 +106,7 @@ impl SetArgsExtractor {
     pub fn extract_bool_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> bool {
         self.args_extractor.extract_bool_value(
@@ -127,7 +127,7 @@ impl SetArgsExtractor {
     pub fn extract_int_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         self.args_extractor.extract_int_value(
@@ -149,8 +149,8 @@ impl SetArgsExtractor {
     pub fn extract_set_array_element(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
         solution: &HashMap<String, VariableValue>,
     ) -> HashSet<i64> {
         let idx = self.args_extractor.extract_int_value(

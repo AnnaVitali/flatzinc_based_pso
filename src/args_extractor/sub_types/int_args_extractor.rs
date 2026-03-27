@@ -1,6 +1,6 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Argument, Array, Call, Identifier};
+use flatzinc_serde::{Argument, Array, Constraint};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
@@ -58,9 +58,9 @@ impl IntArgsExtractor {
     pub fn extract_var_values_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
-    ) -> Vec<Identifier> {
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
+    ) -> Vec<String> {
         self.args_extractor
             .extract_var_values_lin_expr(index, constraint, arrays)
     }
@@ -77,7 +77,7 @@ impl IntArgsExtractor {
     pub fn extract_bool_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> bool {
         let literal = self.args_extractor.extract_term(constraint, index);
@@ -95,8 +95,8 @@ impl IntArgsExtractor {
     /// The extracted integer value from the array element.
     pub fn extract_int_element_array(
         &self,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         self.args_extractor
@@ -115,7 +115,7 @@ impl IntArgsExtractor {
     pub fn extract_int_value(
         &self,
         index: usize,
-        constraint: &Call,
+        constraint: &Constraint,
         solution: &HashMap<String, VariableValue>,
     ) -> i64 {
         let literal = self.args_extractor.extract_term(constraint, index);
@@ -134,8 +134,8 @@ impl IntArgsExtractor {
     pub fn extract_int_coefficients_lin_expr(
         &self,
         index: usize,
-        constraint: &Call,
-        arrays: &HashMap<Identifier, Array>,
+        constraint: &Constraint,
+        arrays: &HashMap<String, Array>,
     ) -> Vec<i64> {
         self.args_extractor
             .extract_int_coefficients_lin_expr(index, constraint, arrays)

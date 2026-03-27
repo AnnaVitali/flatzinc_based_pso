@@ -1,7 +1,7 @@
 use crate::args_extractor::sub_types::set_args_extractor::SetArgsExtractor;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::{Array, Identifier};
+use flatzinc_serde::Array;
 use log::info;
 use std::collections::{HashMap, HashSet};
 
@@ -17,7 +17,7 @@ pub const R_TERM_INDEX: usize = 2;
 /// This struct contains methods for evaluating set constraints such as equality, inequality, linear expressions,
 /// and arithmetic operations. It uses argument extraction utilities and supports verbose output for debugging. 
 pub struct SetEvaluator {
-    arrays: HashMap<Identifier, Array>,
+    arrays: HashMap<String, Array>,
     args_extractor: SetArgsExtractor,
     verbose: bool,
 }
@@ -30,7 +30,7 @@ impl SetEvaluator {
     /// * `verbose` - Whether to enable verbose logging.
     /// # Returns
     /// A new instance of `SetFunctionalEvaluator`.
-    pub fn new(arrays: HashMap<Identifier, Array>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, verbose: bool) -> Self {
         let args_extractor = SetArgsExtractor::new();
 
         Self {
@@ -1952,7 +1952,7 @@ impl SetEvaluator {
 
     fn identifier_from_vars(
         &self,
-        vars: &HashMap<i64, Identifier>,
+        vars: &HashMap<i64, String>,
         index: usize,
     ) -> Option<String> {
         vars.get(&(index as i64)).map(|id| id.to_string())
