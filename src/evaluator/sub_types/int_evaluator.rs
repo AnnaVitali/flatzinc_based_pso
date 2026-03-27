@@ -20,7 +20,7 @@ pub const CONST_LIN_CONSTR_INDEX: usize = 2;
 ///
 /// This struct contains methods for evaluating integer constraints such as equality, inequality, linear expressions,
 /// and arithmetic operations. It uses argument extraction utilities and supports verbose output for debugging.
-pub struct IntFunctionalEvaluator {
+pub struct IntEvaluator {
     /// A map of identifiers to arrays used in constraint evaluation.
     arrays: HashMap<Identifier, Array>,
     /// An extractor for integer arguments from constraints.
@@ -29,7 +29,7 @@ pub struct IntFunctionalEvaluator {
     verbose: bool,
 }
 
-impl IntFunctionalEvaluator {
+impl IntEvaluator {
         
     /// Creates a new `IntFunctionalEvaluator` instance.
     ///

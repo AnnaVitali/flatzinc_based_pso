@@ -1,6 +1,6 @@
 use crate::args_extractor::sub_types::set_args_extractor::SetArgsExtractor;
 use crate::evaluator::mini_evaluator::CallWithDefines;
-use crate::evaluator::sub_types::set_functional_evaluator::{
+use crate::evaluator::sub_types::set_evaluator::{
     ARRAY_INDEX, X_TERM_INDEX, Y_TERM_INDEX,
 };
 use crate::solution_provider::VariableValue;

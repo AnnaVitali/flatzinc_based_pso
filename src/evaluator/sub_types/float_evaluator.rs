@@ -19,7 +19,7 @@ pub const FLOAT_EQ_TOLERANCE: f64 = 1e-4;
 ///
 /// This struct stores arrays, an argument extractor, and a verbosity flag, and provides methods to generate functional evaluators for float constraints such as arithmetic, trigonometric, and comparison operations.
 #[derive(Debug, Clone, Default)]
-pub struct FloatFunctionalEvaluator {
+pub struct FloatEvaluator {
     /// Map of array identifiers to their values.
     arrays: HashMap<Identifier, Array>,
     /// Helper for extracting float arguments from constraints.
@@ -29,7 +29,7 @@ pub struct FloatFunctionalEvaluator {
 }
 
 
-impl FloatFunctionalEvaluator {
+impl FloatEvaluator {
     /// Creates a new `FloatFunctionalEvaluator` with the provided arrays and verbosity flag.
     ///
     /// # Arguments

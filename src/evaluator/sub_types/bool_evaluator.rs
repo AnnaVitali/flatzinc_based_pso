@@ -18,7 +18,7 @@ pub const COEFF_LIN_CONSTR_INDEX: usize = 0;
 ///
 /// This struct stores arrays, an argument extractor, and a verbosity flag, and provides methods to generate functional evaluators for boolean constraints such as AND, OR, XOR, NOT, and reified versions.
 #[derive(Debug, Clone, Default)]
-pub struct BoolFunctionalEvaluator {
+pub struct BoolEvaluator {
     /// Map of array identifiers to their values.
     arrays: HashMap<Identifier, Array>,
     /// Helper for extracting boolean arguments from constraints.
@@ -27,7 +27,7 @@ pub struct BoolFunctionalEvaluator {
     verbose: bool,
 }
 
-impl BoolFunctionalEvaluator {
+impl BoolEvaluator {
     /// Creates a new `BoolFunctionalEvaluator` with the provided arrays and verbosity flag.
     ///
     /// # Arguments

@@ -16,13 +16,13 @@ pub const R_TERM_INDEX: usize = 2;
 ///
 /// This struct contains methods for evaluating set constraints such as equality, inequality, linear expressions,
 /// and arithmetic operations. It uses argument extraction utilities and supports verbose output for debugging. 
-pub struct SetFunctionalEvaluator {
+pub struct SetEvaluator {
     arrays: HashMap<Identifier, Array>,
     args_extractor: SetArgsExtractor,
     verbose: bool,
 }
 
-impl SetFunctionalEvaluator {
+impl SetEvaluator {
     /// Returns a new `SetFunctionalEvaluator` instance.
     ///
     /// # Arguments

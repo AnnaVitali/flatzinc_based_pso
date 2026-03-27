@@ -1,7 +1,7 @@
 use crate::args_extractor::sub_types::int_args_extractor::IntArgsExtractor;
 use crate::data_utility::lin_expression::int_lin_left_term;
 use crate::evaluator::mini_evaluator::CallWithDefines;
-use crate::evaluator::sub_types::int_functional_evaluator::{
+use crate::evaluator::sub_types::int_evaluator::{
     A_TERM_INDEX, B_TERM_INDEX, C_TERM_INDEX, COEFF_LIN_CONSTR_INDEX, CONST_LIN_CONSTR_INDEX,
     R_TERM_INDEX, VARS_LIN_CONSTR_INDEX,
 };

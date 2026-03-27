@@ -1,6 +1,6 @@
 use crate::args_extractor::sub_types::bool_args_extractor::BoolArgsExtractor;
 use crate::evaluator::mini_evaluator::CallWithDefines;
-use crate::evaluator::sub_types::bool_functional_evaluator::{
+use crate::evaluator::sub_types::bool_evaluator::{
     A_TERM_INDEX, AS_ARRAY_INDEX, B_TERM_INDEX, BS_ARRAY_INDEX, C_TERM_INDEX,
 };
 use crate::solution_provider::VariableValue;

@@ -1,7 +1,7 @@
-use crate::evaluator::sub_types::bool_functional_evaluator::BoolFunctionalEvaluator;
-use crate::evaluator::sub_types::float_functional_evaluator::FloatFunctionalEvaluator;
-use crate::evaluator::sub_types::int_functional_evaluator::IntFunctionalEvaluator;
-use crate::evaluator::sub_types::set_functional_evaluator::SetFunctionalEvaluator;
+use crate::evaluator::sub_types::bool_evaluator::BoolEvaluator;
+use crate::evaluator::sub_types::float_evaluator::FloatEvaluator;
+use crate::evaluator::sub_types::int_evaluator::IntEvaluator;
+use crate::evaluator::sub_types::set_evaluator::SetEvaluator;
 use crate::invariant_graph::InvariantGraph;
 use crate::solution_provider::{SolutionProvider, VariableValue};
 use crate::variable_assigner::variable_assigner::VariableAssigner;
@@ -40,13 +40,13 @@ pub struct MiniEvaluator {
     /// A map from array identifiers to their corresponding `Array` definitions from the FlatZinc model.
     arrays_hashmap: HashMap<Identifier, Array>,
     /// Functional evaluators for different types of constraints (float, int, bool, set) that provide methods to evaluate specific constraint types.
-    float_functional_evaluator: FloatFunctionalEvaluator,
+    float_functional_evaluator: FloatEvaluator,
     /// Functional evaluator for integer constraints.
-    int_functional_evaluator: IntFunctionalEvaluator,
+    int_functional_evaluator: IntEvaluator,
     /// Functional evaluator for boolean constraints.
-    bool_functional_evaluator: BoolFunctionalEvaluator,
+    bool_functional_evaluator: BoolEvaluator,
     /// Functional evaluator for set constraints.
-    set_functional_evaluator: SetFunctionalEvaluator,
+    set_functional_evaluator: SetEvaluator,
     /// A variable assigner that assigns values to defined variables based on the constraints and arrays in the model.
     variable_assigner: VariableAssigner,
     /// The current solution map that is being evaluated, mapping variable names to their assigned values.
@@ -105,11 +105,11 @@ impl MiniEvaluator {
         );
 
         let float_functional_evaluator =
-            FloatFunctionalEvaluator::new(arrays_hashmap.clone(), verbose);
-        let int_functional_evaluator = IntFunctionalEvaluator::new(arrays_hashmap.clone(), verbose);
+            FloatEvaluator::new(arrays_hashmap.clone(), verbose);
+        let int_functional_evaluator = IntEvaluator::new(arrays_hashmap.clone(), verbose);
         let bool_functional_evaluator =
-            BoolFunctionalEvaluator::new(arrays_hashmap.clone(), verbose);
-        let set_functional_evaluator = SetFunctionalEvaluator::new(arrays_hashmap.clone(), verbose);
+            BoolEvaluator::new(arrays_hashmap.clone(), verbose);
+        let set_functional_evaluator = SetEvaluator::new(arrays_hashmap.clone(), verbose);
 
         let mut evaluator = Self {
             fzn,

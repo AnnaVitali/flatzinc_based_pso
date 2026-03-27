@@ -1,4 +1,4 @@
-pub mod float_functional_evaluator;
-pub mod int_functional_evaluator;
-pub mod bool_functional_evaluator;
-pub mod set_functional_evaluator;
+pub mod float_evaluator;
+pub mod int_evaluator;
+pub mod bool_evaluator;
+pub mod set_evaluator;
