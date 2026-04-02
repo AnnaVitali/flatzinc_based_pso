@@ -1,7 +1,7 @@
 [package]
-name = "flatzinc_based_pso"
+name = "constraint_evaluator"
 version = "0.1.0"
-edition = "2026"
+edition = "2024"
 
 [dependencies]
 flatzinc-serde = "0.4.4"

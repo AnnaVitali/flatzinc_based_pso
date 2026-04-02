@@ -1,16 +1,16 @@
 {
   "model": "g11",
   "algorithm": "flatzinc_pso",
-  "runs": 10,
+  "runs": 50,
   "objective": {
-    "count": 10,
+    "count": 50,
     "best": 0.75,
     "mean": 0.75,
-    "std": 0.0,
-    "worst": 0.75
+    "std": 1.570092458683775e-17,
+    "worst": 0.7500000000000001
   },
   "violation": {
-    "count": 10,
+    "count": 50,
     "best": 0.0,
     "mean": 0.0,
     "std": 0.0,

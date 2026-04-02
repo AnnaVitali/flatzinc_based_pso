@@ -26,6 +26,9 @@ _MANUAL_OPTIMA: Dict[str, float] = {
     "G10": 7049.248,
     "G11": 0.75,
     "G12": -1.0,
+    "1": -1.393,
+    "2": -6961.813,
+    "6": -213.0,
 }
 
 def fmt(v: Any) -> str:
@@ -79,6 +82,7 @@ def manual_optimum_for_model(model: str) -> Optional[float]:
         idx = int(m.group(1))
         k2 = f"G{idx}"
         return _MANUAL_OPTIMA.get(k2)
+    # TODO: Add manual optimum for p1, p2, p6 if known
     return None
 
 def build_rows(models: List[str], s_map: Dict[str, Dict[str, Any]], alg1: str, alg2: str):
@@ -95,10 +99,20 @@ def build_rows(models: List[str], s_map: Dict[str, Dict[str, Any]], alg1: str, a
     ]
     rows: List[List[str]] = [headers]
     for model in models:
+        # Map 1,2,6 to p1,p2,p6 for display
+        if model == "1":
+            display_model = "p1"
+        elif model == "2":
+            display_model = "p2"
+        elif model == "6":
+            display_model = "p6"
+        else:
+            display_model = model
+
         s_alg1 = s_map.get(model, {}).get(alg1)
         s_alg2 = s_map.get(model, {}).get(alg2)
 
-        # prefer manual known optimum for the model when available
+        # prefer manual known optimum for the model when available (now includes p1, p2, p6)
         manual_opt = manual_optimum_for_model(model)
         if manual_opt is not None:
             optimum = manual_opt
@@ -113,7 +127,7 @@ def build_rows(models: List[str], s_map: Dict[str, Dict[str, Any]], alg1: str, a
         std_alg2 = get_field(s_alg2, "objective", "std")
 
         row = [
-            model,
+            display_model,
             fmt(optimum),
             fmt(best_alg1),
             fmt(best_alg2),
@@ -143,9 +157,10 @@ def write_aligned(path: Path, rows: List[List[str]]):
                     parts.append(cell.rjust(widths[i]))   # right align numeric columns
             fh.write("  ".join(parts) + "\n")
 
+
 def main():
     p = argparse.ArgumentParser(description="Compare reports summary JSONs for multiple models")
-    p.add_argument("models", nargs="+", help="One or more model names, e.g. g01 g02 g03")
+    p.add_argument("models", nargs="+", help="One or more model names, e.g. g01 g02 g03 or 1 2 6")
     p.add_argument("--alg1", default="pso", help="First algorithm name (default: pso)")
     p.add_argument("--alg2", default="flatzinc_based_pso", help="Second algorithm name (default: flatzinc_based_pso)")
     p.add_argument("--out", help="Output file path (default reports/{alg1}_vs_{alg2}_models.txt)")
@@ -157,8 +172,13 @@ def main():
     s_map: Dict[str, Dict[str, Any]] = {}
     for model in args.models:
         s_map[model] = {}
-        f1 = reports / f"{model}_{args.alg1}_summary.json"
-        f2 = reports / f"{model}_{args.alg2}_summary.json"
+        # Special handling for problems 1, 2, 6
+        if model in {"1", "2", "6"}:
+            f1 = reports / f"{model}_pso_summary.json"
+            f2 = reports / f"{model}_flatzinc_pso_summary.json"
+        else:
+            f1 = reports / f"{model}_{args.alg1}_summary.json"
+            f2 = reports / f"{model}_{args.alg2}_summary.json"
         s_map[model][args.alg1] = load_summary(f1)
         s_map[model][args.alg2] = load_summary(f2)
 
