@@ -8,6 +8,7 @@ const MODEL: &str = "g02";
 const VIOLATION_THRESHOLD: f64 = 1e-3;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let start_time = std::time::Instant::now();
     let fzn_path = Path::new(".\\minizinc\\json_flatzinc").join(MODEL.to_string() + ".json");
     let ozn_path = Path::new(".\\minizinc").join(MODEL.to_string() + ".ozn");
     let swarm_size: i64 = 100;
@@ -141,6 +142,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nFinal Scores:");
     println!("PSO: {}", score_viol_pso);
     println!("Flatzinc PSO: {}", score_viol_fltzinc);
+
+    let elapsed_time = start_time.elapsed();
+    println!("Total execution time: {:.2?}", elapsed_time);
 
     Ok(())
 }
