@@ -1,6 +1,7 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
+use crate::data_utility::types::Register;
 use crate::evaluator::mini_evaluator::CallWithDefines;
-use crate::solution_provider::VariableValue;
+use crate::data_utility::types::VariableValue;
 use crate::variable_assigner::sub_types::bool_variable_assigner::BoolVariableAssigner;
 use crate::variable_assigner::sub_types::float_variable_assigner::FloatVariableAssigner;
 use crate::variable_assigner::sub_types::int_variable_assigner::IntVariableAssigner;
@@ -12,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 
-type AssignFn = Arc<dyn Fn(&HashMap<String, VariableValue>) -> VariableValue + Send + Sync>;
+type AssignFn = Arc<dyn Fn(&[Option<VariableValue>]) -> VariableValue + Send + Sync>;
 
 #[derive(Clone, Default)]
 /// The `VariableAssigner` struct is responsible for assigning values to defined variables based on the constraints and a partial solution.
@@ -23,8 +24,10 @@ pub struct VariableAssigner {
     defined_variable: Vec<String>,
     /// A vector of constraints (with their defines) that are used to determine the values of the defined variables.
     constraints: Vec<CallWithDefines>,
-    /// A vector of tuples where each tuple contains a variable name and a corresponding function that computes its value based on the current solution.
-    assigned_functions: Vec<(String, AssignFn)>,
+    /// A hashmap that maps variable names to their indices in the solution vector.
+    variable_register_map: HashMap<String, Register>,
+    /// A vector of tuples where each tuple contains a variable register and a corresponding function that computes its value based on the current solution.
+    assigned_functions: Vec<(Register, AssignFn)>,
     /// An instance of `ArgsExtractor` used to extract arguments from constraints when building the assigned functions.
     args_extractor: ArgsExtractor,
     /// A hashmap that represents the complete solution, mapping variable names to their assigned values. This is updated as variables are assigned.
@@ -53,7 +56,7 @@ impl fmt::Debug for VariableAssigner {
                 &self
                     .assigned_functions
                     .iter()
-                    .map(|(var, _)| var)
+                    .map(|(reg, _)| reg)
                     .collect::<Vec<_>>(),
             )
             .field("args_extractor", &self.args_extractor)
@@ -77,6 +80,7 @@ impl VariableAssigner {
         defined_variable: Vec<String>,
         constraints: Vec<CallWithDefines>,
         arrays: HashMap<String, Array>,
+        variable_map: HashMap<String, Register>,
     ) -> Self {
         Self {
             defined_variable,
@@ -85,10 +89,14 @@ impl VariableAssigner {
             args_extractor: ArgsExtractor::new(),
             complete_solution: HashMap::new(),
             arrays: arrays.clone(),
-            int_variable_assigner: IntVariableAssigner::new(arrays.clone()),
-            float_variable_assigner: FloatVariableAssigner::new(arrays.clone()),
-            bool_variable_assigner: BoolVariableAssigner::new(arrays.clone()),
-            set_variable_assigner: SetVariableAssigner::new(arrays),
+            variable_register_map: variable_map.clone(),
+            int_variable_assigner: IntVariableAssigner::new(arrays.clone(), variable_map.clone()),
+            float_variable_assigner: FloatVariableAssigner::new(
+                arrays.clone(),
+                variable_map.clone(),
+            ),
+            bool_variable_assigner: BoolVariableAssigner::new(arrays.clone(), variable_map.clone()),
+            set_variable_assigner: SetVariableAssigner::new(arrays, variable_map.clone()),
         }
     }
 
@@ -101,22 +109,22 @@ impl VariableAssigner {
     /// A hashmap representing the complete solution after assigning values to the defined variables, mapping variable names to their assigned values.
     pub fn assign_defined_variables(
         &mut self,
-        partial_solution: &HashMap<String, VariableValue>,
-    ) -> HashMap<String, VariableValue> {
-        self.complete_solution = partial_solution.clone();
-
+        partial_solution_vec: &[Option<VariableValue>],
+    ) -> Vec<Option<VariableValue>> {
+        let mut complete_solution_vec = partial_solution_vec.to_vec();
         if self.assigned_functions.is_empty() {
             self.build_assigned_functions();
         }
 
-        for (var, func) in &self.assigned_functions {
-            if !self.complete_solution.contains_key(var) {
-                let value = func(&self.complete_solution);
-                self.complete_solution.insert(var.clone(), value);
+        for (register_inserted_var, func) in &self.assigned_functions {
+            let idx = *register_inserted_var as usize;
+            if complete_solution_vec[idx].is_none() {
+                let value = func(&complete_solution_vec);
+                complete_solution_vec[idx] = Some(value);
             }
         }
 
-        self.complete_solution.clone()
+        complete_solution_vec
     }
 
     fn build_assigned_functions(&mut self) {
@@ -124,9 +132,12 @@ impl VariableAssigner {
             let Some(var) = constraint.defines.clone() else {
                 continue;
             };
-
+            let register = *self
+                .variable_register_map
+                .get(&var)
+                .expect("Variable not found in variable_map");
             let closure = self.build_closure(constraint, &var);
-            self.assigned_functions.push((var, closure));
+            self.assigned_functions.push((register, closure));
         }
     }
 
@@ -186,11 +197,10 @@ impl VariableAssigner {
         &self,
         constraint: &CallWithDefines,
         variable: &String,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_int_element" | "array_var_int_element" => {
-                self.int_variable_assigner.array_int_element(constraint)
-            }
+            "array_int_element" => self.int_variable_assigner.array_int_element(constraint),
+            "array_var_int_element" => self.int_variable_assigner.array_var_int_element(constraint),
             "int_abs" => self.int_variable_assigner.int_abs(constraint),
             "int_div" => self.int_variable_assigner.int_div(constraint),
             "int_eq" => self.int_variable_assigner.int_eq(constraint),
@@ -209,11 +219,12 @@ impl VariableAssigner {
         &self,
         constraint: &CallWithDefines,
         variable: &String,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_float_element" | "array_var_float_element" => {
-                self.float_variable_assigner.array_float_element(constraint)
-            }
+            "array_float_element" => self.float_variable_assigner.array_float_element(constraint),
+            "array_var_float_element" => self
+                .float_variable_assigner
+                .array_var_float_element(constraint),
             "float_abs" => self.float_variable_assigner.float_abs(constraint),
             "float_div" => self.float_variable_assigner.float_div(constraint),
             "float_eq" => self.float_variable_assigner.float_eq(constraint),
@@ -251,14 +262,17 @@ impl VariableAssigner {
         &self,
         constraint: &CallWithDefines,
         _variable: &String,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
         match constraint.call.id.as_str() {
             "array_bool_and" => self.bool_variable_assigner.array_bool_and(constraint),
-            "array_bool_element" | "array_var_bool_element" => {
-                self.bool_variable_assigner.array_bool_element(constraint)
-            }
+            "array_bool_element" => self.bool_variable_assigner.array_bool_element(constraint),
+            "array_var_bool_element" => self
+                .bool_variable_assigner
+                .array_var_bool_element(constraint),
             "bool_and" => self.bool_variable_assigner.bool_and(constraint),
-            "bool_clause" => self.bool_variable_assigner.bool_clause(constraint),
+            "bool_clause" => self
+                .bool_variable_assigner
+                .bool_clause(constraint, constraint.defines.as_ref().unwrap()),
             "bool_eq" => self.bool_variable_assigner.bool_eq(constraint),
             "bool_not" => self.bool_variable_assigner.bool_not(constraint),
             "bool_eq_reif" => self.bool_variable_assigner.bool_eq_reif(constraint),
@@ -288,7 +302,6 @@ impl VariableAssigner {
             "set_ne_reif" => self.set_variable_assigner.set_ne_reif(constraint),
             "set_subset_reif" => self.set_variable_assigner.set_subset_reif(constraint),
             "set_superset_reif" => self.set_variable_assigner.set_superset_reif(constraint),
-
             _ => panic!("Unhandled bool constraint {}", constraint.call.id),
         }
     }
@@ -297,11 +310,12 @@ impl VariableAssigner {
         &self,
         constraint: &CallWithDefines,
         _variable: &String,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> HashSet<i64> + Send + Sync> {
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> HashSet<i64> + Send + Sync> {
         match constraint.call.id.as_str() {
-            "array_set_element" | "array_var_set_element" => {
-                self.set_variable_assigner.array_set_element(&constraint)
-            }
+            "array_set_element" => self.set_variable_assigner.array_set_element(&constraint),
+            "array_var_set_element" => self
+                .set_variable_assigner
+                .array_var_set_element(&constraint),
             "set_diff" => self.set_variable_assigner.set_diff(constraint),
             "set_eq" => self.set_variable_assigner.set_eq(constraint),
             "set_intersect" => self.set_variable_assigner.set_intersect(constraint),

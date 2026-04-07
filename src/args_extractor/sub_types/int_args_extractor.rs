@@ -1,16 +1,15 @@
 use crate::args_extractor::args_extractor::ArgsExtractor;
-use crate::solution_provider::VariableValue;
 use flatzinc_serde::{Argument, Array, Constraint};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
-/// A helper struct for extracting integer arguments from constraints, 
+/// A helper struct for extracting integer arguments from constraints,
 /// utilizing an internal `ArgsExtractor` for common extraction logic.
 pub struct IntArgsExtractor {
     args_extractor: ArgsExtractor,
 }
 
-/// This struct provides methods to extract integer values, arrays of integers, and related information from constraint arguments, 
+/// This struct provides methods to extract integer values, arrays of integers, and related information from constraint arguments,
 /// handling both literals and identifiers that reference variables or arrays in the solution.
 impl IntArgsExtractor {
     /// Creates a new `IntArgsExtractor` with an internal `ArgsExtractor`.
@@ -35,17 +34,6 @@ impl IntArgsExtractor {
             .extract_literal_identifiers_with_index(args)
     }
 
-    /// Extracts all literal identifiers from the given arguments.
-    ///
-    /// # Arguments
-    /// * `args` - A slice of `Argument` to extract identifiers from.
-    ///
-    /// # Returns
-    /// A vector of identifier names as `String`.
-    pub fn extract_literal_identifiers(&self, args: &[Argument]) -> Vec<String> {
-        self.args_extractor.extract_literal_identifiers(args)
-    }
-
     /// Extracts variable identifiers from a linear expression in the constraint.
     ///
     /// # Arguments
@@ -57,12 +45,12 @@ impl IntArgsExtractor {
     /// A vector of variable identifiers from the linear expression.
     pub fn extract_var_values_lin_expr(
         &self,
-        index: usize,
+        index: i64,
         constraint: &Constraint,
         arrays: &HashMap<String, Array>,
     ) -> Vec<String> {
         self.args_extractor
-            .extract_var_values_lin_expr(index, constraint, arrays)
+            .extract_var_values_lin_expr(index as usize, constraint, arrays)
     }
 
     /// Extracts a boolean value from the constraint at the specified argument index.
@@ -74,33 +62,9 @@ impl IntArgsExtractor {
     ///
     /// # Returns
     /// The extracted boolean value.
-    pub fn extract_bool_value(
-        &self,
-        index: usize,
-        constraint: &Constraint,
-        solution: &HashMap<String, VariableValue>,
-    ) -> bool {
-        let literal = self.args_extractor.extract_term(constraint, index);
-        self.args_extractor.extract_bool_value(literal, solution)
-    }
-
-    /// Extracts an integer value from an array element in the constraint.
-    ///
-    /// # Arguments
-    /// * `constraint` - The constraint call containing the argument.
-    /// * `arrays` - A map of identifiers to arrays for resolving array references.
-    /// * `solution` - The solution map for resolving identifiers.
-    ///
-    /// # Returns
-    /// The extracted integer value from the array element.
-    pub fn extract_int_element_array(
-        &self,
-        constraint: &Constraint,
-        arrays: &HashMap<String, Array>,
-        solution: &HashMap<String, VariableValue>,
-    ) -> i64 {
-        self.args_extractor
-            .extract_int_array_element(constraint, arrays, solution)
+    pub fn extract_bool_value(&self, index: i64, constraint: &Constraint) -> bool {
+        let literal = self.args_extractor.extract_term(constraint, index as usize);
+        self.args_extractor.extract_bool_value(literal)
     }
 
     /// Extracts an integer value from the constraint at the specified argument index.
@@ -112,14 +76,9 @@ impl IntArgsExtractor {
     ///
     /// # Returns
     /// The extracted integer value.
-    pub fn extract_int_value(
-        &self,
-        index: usize,
-        constraint: &Constraint,
-        solution: &HashMap<String, VariableValue>,
-    ) -> i64 {
-        let literal = self.args_extractor.extract_term(constraint, index);
-        self.args_extractor.extract_int_value(literal, solution)
+    pub fn extract_int_value(&self, index: i64, constraint: &Constraint) -> i64 {
+        let literal = self.args_extractor.extract_term(constraint, index as usize);
+        self.args_extractor.extract_int_value(literal)
     }
 
     /// Extracts integer coefficients from a linear expression in the constraint.
@@ -133,11 +92,11 @@ impl IntArgsExtractor {
     /// A vector of integer coefficients from the linear expression.
     pub fn extract_int_coefficients_lin_expr(
         &self,
-        index: usize,
+        index: i64,
         constraint: &Constraint,
         arrays: &HashMap<String, Array>,
     ) -> Vec<i64> {
         self.args_extractor
-            .extract_int_coefficients_lin_expr(index, constraint, arrays)
+            .extract_int_coefficients_lin_expr(index as usize, constraint, arrays)
     }
 }

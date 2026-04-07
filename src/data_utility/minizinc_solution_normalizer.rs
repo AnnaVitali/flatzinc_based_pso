@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::solution_provider::VariableValue;
+use crate::data_utility::types::VariableValue;
 
 /// A utility for normalizing and denormalizing MiniZinc solutions based on variable bounds.
 ///

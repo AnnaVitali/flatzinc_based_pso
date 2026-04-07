@@ -1,14 +1,13 @@
 use crate::ozn_parser::ozn_parser::{OznMapping, OznParser};
 use flatzinc_serde::{Array, Domain, FlatZinc, Literal, Type};
 use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
 use std::path::Path;
-use crate::data_utility::types::Register;
+use crate::data_utility::types::VariableValue;
 
 #[derive(Debug, Clone, Default)]
-/// A struct responsible for providing solutions to variables defined in a FlatZinc model, based on the model's output specifications 
+/// A struct responsible for providing solutions to variables defined in a FlatZinc model, based on the model's output specifications
 /// and an optional .ozn file for mapping output variables to their sources.
-/// The `SolutionProvider` maintains a mapping of variables that need to be defined, a set of already defined variables, 
+/// The `SolutionProvider` maintains a mapping of variables that need to be defined, a set of already defined variables,
 /// and a mapping of array elements to their corresponding variable names for handling array outputs.
 pub struct SolutionProvider {
     /// The original FlatZinc model, containing the variables, arrays, and output specifications.
@@ -29,16 +28,16 @@ pub struct SolutionProvider {
 /// Implementation of the `SolutionProvider` struct, providing methods to create a new provider,
 /// provide values for different types of variables (integers, floats, booleans, sets, arrays), and retrieve the current solution map and defined variables.
 impl SolutionProvider {
-
     /// Creates a new `SolutionProvider` instance by parsing the provided FlatZinc model and .ozn file, initializing the internal mappings for variables, arrays, and output specifications.
     pub fn new(fzn: FlatZinc, ozn: &Path) -> Self {
         let mut tobe_defined_vars_map = HashMap::new();
         let array_elements_map = HashMap::new();
-        let arrays: HashMap<String, Array> = fzn.arrays
+        let arrays: HashMap<String, Array> = fzn
+            .arrays
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        
+
         let output = fzn.output.clone();
 
         let mut defined_vars_map: HashSet<String> = HashSet::with_capacity(fzn.variables.len());
@@ -64,11 +63,9 @@ impl SolutionProvider {
                 tobe_defined_vars_map.insert(id.clone(), VariableValue::Set(set_value));
             }
         }
-        
+
         let mut ozn_parser = OznParser::new();
         ozn_parser.parse(ozn);
-
-       
 
         Self {
             fzn,
@@ -82,23 +79,25 @@ impl SolutionProvider {
     }
 
     /// Provides an integer value for a variable, updating the internal mapping of variables to be defined and marking the variable as defined.
-    /// 
+    ///
     /// # Arguments
     /// * `name` - The name of the variable for which the value is being provided
     /// * `value` - The integer value to be assigned to the variable
     pub fn provide_int(&mut self, name: String, value: i64) {
         let target_name = self.find_variable_name(&name);
-        self.tobe_defined_vars_map.insert(target_name, VariableValue::Int(value));
+        self.tobe_defined_vars_map
+            .insert(target_name, VariableValue::Int(value));
     }
 
     /// Provides a float value for a variable, updating the internal mapping of variables to be defined and marking the variable as defined.
-    /// 
+    ///
     /// # Arguments
     /// * `name` - The name of the variable for which the value is being provided
     /// * `value` - The float value to be assigned to the variable
     pub fn provide_float(&mut self, name: String, value: f64) {
         let target_name = self.find_variable_name(&name);
-        self.tobe_defined_vars_map.insert(target_name, VariableValue::Float(value));
+        self.tobe_defined_vars_map
+            .insert(target_name, VariableValue::Float(value));
     }
 
     /// Provides a boolean value for a variable, updating the internal mapping of variables to be defined and marking the variable as defined.
@@ -108,7 +107,8 @@ impl SolutionProvider {
     /// * `value` - Boolean value to assign
     pub fn provide_bool(&mut self, name: String, value: bool) {
         let target_name = self.find_variable_name(&name);
-        self.tobe_defined_vars_map.insert(target_name, VariableValue::Bool(value));
+        self.tobe_defined_vars_map
+            .insert(target_name, VariableValue::Bool(value));
     }
 
     /// Provides a set value for a variable, updating the internal mapping of variables to be defined and marking the variable as defined.
@@ -118,7 +118,8 @@ impl SolutionProvider {
     /// * `value` - Set value to assign
     pub fn provide_set(&mut self, name: String, value: HashSet<i64>) {
         let target_name = self.find_variable_name(&name);
-        self.tobe_defined_vars_map.insert(target_name, VariableValue::Set(value));
+        self.tobe_defined_vars_map
+            .insert(target_name, VariableValue::Set(value));
     }
 
     /// Provides an array of integer values for a variable, updating the internal mapping of variables to be defined and marking the variable as defined.
@@ -339,63 +340,5 @@ impl SolutionProvider {
     /// Returns a reference to the map of array element references.
     pub fn array_elements_map(&self) -> &HashMap<String, String> {
         &self.array_elements_map
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum VariableValue {
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    Set(HashSet<i64>),
-}
-
-impl From<i64> for VariableValue {
-    fn from(value: i64) -> Self {
-        VariableValue::Int(value)
-    }
-}
-
-impl From<f64> for VariableValue {
-    fn from(value: f64) -> Self {
-        VariableValue::Float(value)
-    }
-}
-
-impl VariableValue {
-    pub fn as_int(&self) -> i64 {
-        match self {
-            VariableValue::Int(value) => *value,
-            VariableValue::Float(_) => unreachable!(),
-            VariableValue::Bool(_) => unreachable!(),
-            VariableValue::Set(_) => unreachable!(),
-        }
-    }
-
-    pub fn as_float(&self) -> f64 {
-        match self {
-            VariableValue::Float(value) => *value,
-            VariableValue::Int(_) => unreachable!(),
-            VariableValue::Bool(_) => unreachable!(),
-            VariableValue::Set(_) => unreachable!(),
-        }
-    }
-
-    pub fn as_bool(&self) -> bool {
-        match self {
-            VariableValue::Bool(value) => *value,
-            VariableValue::Int(_) => unreachable!(),
-            VariableValue::Float(_) => unreachable!(),
-            VariableValue::Set(_) => unreachable!(),
-        }
-    }
-
-    pub fn as_set(&self) -> HashSet<i64> {
-        match self {
-            VariableValue::Set(set) => set.clone(),
-            VariableValue::Int(_) => unreachable!(),
-            VariableValue::Float(_) => unreachable!(),
-            VariableValue::Bool(_) => unreachable!(),
-        }
     }
 }

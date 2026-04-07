@@ -1,6 +1,7 @@
 use crate::data_utility::minizinc_solution_normalizer::MiniZincSolutionNormalizer;
 use crate::evaluator::mini_evaluator::MiniEvaluator;
-use crate::solution_provider::{SolutionProvider, VariableValue};
+use crate::solution_provider::SolutionProvider;
+use crate::data_utility::types::VariableValue;
 use flatzinc_serde::{Domain, FlatZinc, Type, Variable};
 use rand::RngExt;
 use rand::SeedableRng;

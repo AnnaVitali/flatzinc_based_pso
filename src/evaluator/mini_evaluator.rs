@@ -4,17 +4,18 @@ use crate::evaluator::sub_types::float_evaluator::FloatEvaluator;
 use crate::evaluator::sub_types::int_evaluator::IntEvaluator;
 use crate::evaluator::sub_types::set_evaluator::SetEvaluator;
 use crate::invariant_graph::InvariantGraph;
-use crate::solution_provider::{SolutionProvider, VariableValue};
+use crate::solution_provider::SolutionProvider;
+use crate::data_utility::types::VariableValue;
 use crate::variable_assigner::variable_assigner::VariableAssigner;
 use env_logger::Env;
 use flatzinc_serde::{Array, Constraint, Domain, FlatZinc, Literal, Type};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
+use std::{fmt, vec};
 
 #[derive(Debug, Clone)]
 /// A struct representing a constraint call along with its defines (if any).
@@ -83,7 +84,8 @@ impl MiniEvaluator {
             .collect();
         let graph = InvariantGraph::build(&constraints, &arrays_hashmap, false);
         constraints = graph.topologically_sorted_constraints(&constraints);
-        let variable_register_map: HashMap<String, Register> = fzn.variables
+        let variable_register_map: HashMap<String, Register> = fzn
+            .variables
             .iter()
             .enumerate()
             .map(|(i, var)| (var.0.clone(), (i) as Register))
@@ -111,17 +113,33 @@ impl MiniEvaluator {
             defined_variables,
             constraints.clone(),
             arrays_hashmap.clone(),
+            variable_register_map.clone(),
         );
 
-        let float_functional_evaluator =
-            FloatEvaluator::new(arrays_hashmap.clone(), variable_register_map.clone(), verbose);
-        let int_functional_evaluator = IntEvaluator::new(arrays_hashmap.clone(), variable_register_map.clone(), verbose);
-        let bool_functional_evaluator =
-            BoolEvaluator::new(arrays_hashmap.clone(), variable_register_map.clone(), verbose);
-        let set_functional_evaluator = SetEvaluator::new(arrays_hashmap.clone(), variable_register_map.clone(), verbose);
+        let float_functional_evaluator = FloatEvaluator::new(
+            arrays_hashmap.clone(),
+            variable_register_map.clone(),
+            verbose,
+        );
+        let int_functional_evaluator = IntEvaluator::new(
+            arrays_hashmap.clone(),
+            variable_register_map.clone(),
+            verbose,
+        );
+        let bool_functional_evaluator = BoolEvaluator::new(
+            arrays_hashmap.clone(),
+            variable_register_map.clone(),
+            verbose,
+        );
+        let set_functional_evaluator = SetEvaluator::new(
+            arrays_hashmap.clone(),
+            variable_register_map.clone(),
+            verbose,
+        );
 
-        let solution_vec: Vec<VariableValue> = vec![VariableValue::Int(0); variable_register_map.len()];
-        
+        let solution_vec: Vec<VariableValue> =
+            vec![VariableValue::Int(0); variable_register_map.len()];
+
         let mut evaluator = Self {
             fzn,
             variable_bounds: HashMap::new(),
@@ -145,25 +163,46 @@ impl MiniEvaluator {
     }
 
     /// Evaluates the constraints based on the provided solution map from the `SolutionProvider`, returning the objective value (if any) and the total violation value.
-     ///
-     /// # Arguments
-     /// * `solution_provider` - A reference to a `SolutionProvider` that provides the current solution map for evaluation.
-     ///
-     /// # Returns
-     /// A tuple containing an optional objective value (as `f64`) and the total violation value (as `f64`), which is the sum of constraint violations and domain violations.
+    ///
+    /// # Arguments
+    /// * `solution_provider` - A reference to a `SolutionProvider` that provides the current solution map for evaluation.
+    ///
+    /// # Returns
+    /// A tuple containing an optional objective value (as `f64`) and the total violation value (as `f64`), which is the sum of constraint violations and domain violations.
     pub fn evaluate_invariants_graph(
         &mut self,
         solution_provider: &SolutionProvider,
     ) -> (Option<f64>, f64) {
-        self.solution = self
-            .variable_assigner
-            .assign_defined_variables(solution_provider.solution_map());
+        let partial_solution = solution_provider.solution_map();
+        let mut partial_solution_vec: Vec<Option<VariableValue>> =
+            vec![None; self.variable_register_map.len()];
 
         for (var_id, index) in &self.variable_register_map {
-            if let Some(value) = self.solution.get(var_id) {
-                self.solution_vec[*index as usize] = value.clone();
+            if let Some(value) = partial_solution.get(var_id) {
+                partial_solution_vec[*index as usize] = Some(value.clone());
             }
-        }        
+        }
+
+        let complete_solution_vec = self
+            .variable_assigner
+            .assign_defined_variables(&partial_solution_vec);
+
+        for (i, val_opt) in complete_solution_vec.iter().enumerate() {
+            if let Some(val) = val_opt {
+                self.solution_vec[i] = val.clone();
+            }
+        }
+
+        self.solution.clear();
+        for (var_id, index) in &self.variable_register_map {
+            if let Some(val) = complete_solution_vec
+                .get(*index as usize)
+                .and_then(|v| v.as_ref())
+            {
+                self.solution.insert(var_id.clone(), val.clone());
+            }
+        }
+
         let domain_violation = self.evaluate_domain_constraints();
         let (objective, constraint_violation) =
             self.evaluate_constraint_list(&self.constraints.clone());
@@ -246,10 +285,14 @@ impl MiniEvaluator {
 
             let id = constraint.call.id.as_str();
 
-            let func_arc:  Arc<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> = 
-            match id {
-                "array_int_element" => Arc::from(self.int_functional_evaluator.array_int_element(constraint)),
-                "array_var_int_element" => Arc::from(self.int_functional_evaluator.array_var_int_element(constraint)),
+            let func_arc: Arc<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> = match id {
+                "array_int_element" => {
+                    Arc::from(self.int_functional_evaluator.array_int_element(constraint))
+                }
+                "array_var_int_element" => Arc::from(
+                    self.int_functional_evaluator
+                        .array_var_int_element(constraint),
+                ),
                 "int_abs" => Arc::from(self.int_functional_evaluator.int_abs(constraint)),
                 "int_div" => Arc::from(self.int_functional_evaluator.int_div(constraint)),
                 "int_eq" => Arc::from(self.int_functional_evaluator.int_eq(constraint)),
@@ -257,11 +300,17 @@ impl MiniEvaluator {
                 "int_le" => Arc::from(self.int_functional_evaluator.int_le(constraint)),
                 "int_le_reif" => Arc::from(self.int_functional_evaluator.int_le_reif(constraint)),
                 "int_lin_eq" => Arc::from(self.int_functional_evaluator.int_lin_eq(constraint)),
-                "int_lin_eq_reif" => Arc::from(self.int_functional_evaluator.int_lin_eq_reif(constraint)),
+                "int_lin_eq_reif" => {
+                    Arc::from(self.int_functional_evaluator.int_lin_eq_reif(constraint))
+                }
                 "int_lin_le" => Arc::from(self.int_functional_evaluator.int_lin_le(constraint)),
-                "int_lin_le_reif" => Arc::from(self.int_functional_evaluator.int_lin_le_reif(constraint)),
+                "int_lin_le_reif" => {
+                    Arc::from(self.int_functional_evaluator.int_lin_le_reif(constraint))
+                }
                 "int_lin_ne" => Arc::from(self.int_functional_evaluator.int_lin_ne(constraint)),
-                "int_lin_ne_reif" => Arc::from(self.int_functional_evaluator.int_lin_ne_reif(constraint)),
+                "int_lin_ne_reif" => {
+                    Arc::from(self.int_functional_evaluator.int_lin_ne_reif(constraint))
+                }
                 "int_lt" => Arc::from(self.int_functional_evaluator.int_lt(constraint)),
                 "int_lt_reif" => Arc::from(self.int_functional_evaluator.int_lt_reif(constraint)),
                 "int_max" => Arc::from(self.int_functional_evaluator.int_max(constraint)),
@@ -271,8 +320,14 @@ impl MiniEvaluator {
                 "int_ne_reif" => Arc::from(self.int_functional_evaluator.int_ne_reif(constraint)),
                 "int_pow" => Arc::from(self.int_functional_evaluator.int_pow(constraint)),
                 "int_times" => Arc::from(self.int_functional_evaluator.int_times(constraint)),
-                "array_float_element" => Arc::from(self.float_functional_evaluator.array_float_element(constraint)),
-                "array_var_float_element" => Arc::from(self.float_functional_evaluator.array_var_float_element(constraint)),
+                "array_float_element" => Arc::from(
+                    self.float_functional_evaluator
+                        .array_float_element(constraint),
+                ),
+                "array_var_float_element" => Arc::from(
+                    self.float_functional_evaluator
+                        .array_var_float_element(constraint),
+                ),
                 "float_abs" => Arc::from(self.float_functional_evaluator.float_abs(constraint)),
                 "float_acos" => Arc::from(self.float_functional_evaluator.float_acos(constraint)),
                 "float_acosh" => Arc::from(self.float_functional_evaluator.float_acosh(constraint)),
@@ -284,27 +339,55 @@ impl MiniEvaluator {
                 "float_cosh" => Arc::from(self.float_functional_evaluator.float_cosh(constraint)),
                 "float_div" => Arc::from(self.float_functional_evaluator.float_div(constraint)),
                 "float_eq" => Arc::from(self.float_functional_evaluator.float_eq(constraint)),
-                "float_eq_reif" => Arc::from(self.float_functional_evaluator.float_eq_reif(constraint)),
+                "float_eq_reif" => {
+                    Arc::from(self.float_functional_evaluator.float_eq_reif(constraint))
+                }
                 "float_exp" => Arc::from(self.float_functional_evaluator.float_exp(constraint)),
                 "float_le" => Arc::from(self.float_functional_evaluator.float_le(constraint)),
-                "float_le_reif" => Arc::from(self.float_functional_evaluator.float_le_reif(constraint)),
-                "float_lin_eq" => Arc::from(self.float_functional_evaluator.float_lin_eq(constraint)),
-                "float_lin_eq_reif" => Arc::from(self.float_functional_evaluator.float_lin_eq_reif(constraint)),
-                "float_lin_le" => Arc::from(self.float_functional_evaluator.float_lin_le(constraint)),
-                "float_lin_le_reif" => Arc::from(self.float_functional_evaluator.float_lin_le_reif(constraint)),
-                "float_lin_lt" => Arc::from(self.float_functional_evaluator.float_lin_lt(constraint)),
-                "float_lin_lt_reif" => Arc::from(self.float_functional_evaluator.float_lin_lt_reif(constraint)),
-                "float_lin_ne" => Arc::from(self.float_functional_evaluator.float_lin_ne(constraint)),
-                "float_lin_ne_reif" => Arc::from(self.float_functional_evaluator.float_lin_ne_reif(constraint)),
-                "float_ln" => Arc::from(self.float_functional_evaluator.float_ln(constraint)),  
+                "float_le_reif" => {
+                    Arc::from(self.float_functional_evaluator.float_le_reif(constraint))
+                }
+                "float_lin_eq" => {
+                    Arc::from(self.float_functional_evaluator.float_lin_eq(constraint))
+                }
+                "float_lin_eq_reif" => Arc::from(
+                    self.float_functional_evaluator
+                        .float_lin_eq_reif(constraint),
+                ),
+                "float_lin_le" => {
+                    Arc::from(self.float_functional_evaluator.float_lin_le(constraint))
+                }
+                "float_lin_le_reif" => Arc::from(
+                    self.float_functional_evaluator
+                        .float_lin_le_reif(constraint),
+                ),
+                "float_lin_lt" => {
+                    Arc::from(self.float_functional_evaluator.float_lin_lt(constraint))
+                }
+                "float_lin_lt_reif" => Arc::from(
+                    self.float_functional_evaluator
+                        .float_lin_lt_reif(constraint),
+                ),
+                "float_lin_ne" => {
+                    Arc::from(self.float_functional_evaluator.float_lin_ne(constraint))
+                }
+                "float_lin_ne_reif" => Arc::from(
+                    self.float_functional_evaluator
+                        .float_lin_ne_reif(constraint),
+                ),
+                "float_ln" => Arc::from(self.float_functional_evaluator.float_ln(constraint)),
                 "float_log10" => Arc::from(self.float_functional_evaluator.float_log10(constraint)),
                 "float_log2" => Arc::from(self.float_functional_evaluator.float_log2(constraint)),
                 "float_lt" => Arc::from(self.float_functional_evaluator.float_lt(constraint)),
-                "float_lt_reif" => Arc::from(self.float_functional_evaluator.float_lt_reif(constraint)),
+                "float_lt_reif" => {
+                    Arc::from(self.float_functional_evaluator.float_lt_reif(constraint))
+                }
                 "float_max" => Arc::from(self.float_functional_evaluator.float_max(constraint)),
                 "float_min" => Arc::from(self.float_functional_evaluator.float_min(constraint)),
                 "float_ne" => Arc::from(self.float_functional_evaluator.float_ne(constraint)),
-                "float_ne_reif" => Arc::from(self.float_functional_evaluator.float_ne_reif(constraint)),
+                "float_ne_reif" => {
+                    Arc::from(self.float_functional_evaluator.float_ne_reif(constraint))
+                }
                 "float_plus" => Arc::from(self.float_functional_evaluator.float_plus(constraint)),
                 "float_pow" => Arc::from(self.float_functional_evaluator.float_pow(constraint)),
                 "float_sin" => Arc::from(self.float_functional_evaluator.float_sin(constraint)),
@@ -314,33 +397,56 @@ impl MiniEvaluator {
                 "float_tanh" => Arc::from(self.float_functional_evaluator.float_tanh(constraint)),
                 "float_times" => Arc::from(self.float_functional_evaluator.float_times(constraint)),
                 "int2float" => Arc::from(self.float_functional_evaluator.int2float(constraint)),
-                "array_bool_and" => Arc::from(self.bool_functional_evaluator.array_bool_and(constraint)),
-                "array_bool_element" => Arc::from(self.bool_functional_evaluator.array_bool_element(constraint)),
-                "array_var_bool_element" => Arc::from(self.bool_functional_evaluator.array_var_bool_element(constraint)),
-                "array_bool_xor" => Arc::from(self.bool_functional_evaluator.array_bool_xor(constraint)),
+                "array_bool_and" => {
+                    Arc::from(self.bool_functional_evaluator.array_bool_and(constraint))
+                }
+                "array_bool_element" => Arc::from(
+                    self.bool_functional_evaluator
+                        .array_bool_element(constraint),
+                ),
+                "array_var_bool_element" => Arc::from(
+                    self.bool_functional_evaluator
+                        .array_var_bool_element(constraint),
+                ),
+                "array_bool_xor" => {
+                    Arc::from(self.bool_functional_evaluator.array_bool_xor(constraint))
+                }
                 "bool_and" => Arc::from(self.bool_functional_evaluator.bool_and(constraint)),
                 "bool_clause" => Arc::from(self.bool_functional_evaluator.bool_clause(constraint)),
                 "bool_eq" => Arc::from(self.bool_functional_evaluator.bool_eq(constraint)),
-                "bool_eq_reif" => Arc::from(self.bool_functional_evaluator.bool_eq_reif(constraint)),
+                "bool_eq_reif" => {
+                    Arc::from(self.bool_functional_evaluator.bool_eq_reif(constraint))
+                }
                 "bool_le" => Arc::from(self.bool_functional_evaluator.bool_le(constraint)),
-                "bool_le_reif" => Arc::from(self.bool_functional_evaluator.bool_le_reif(constraint)),
+                "bool_le_reif" => {
+                    Arc::from(self.bool_functional_evaluator.bool_le_reif(constraint))
+                }
                 "bool_lin_eq" => Arc::from(self.bool_functional_evaluator.bool_lin_eq(constraint)),
                 "bool_lin_le" => Arc::from(self.bool_functional_evaluator.bool_lin_le(constraint)),
                 "bool2int" => Arc::from(self.bool_functional_evaluator.bool2int(constraint)),
                 "bool_lt" => Arc::from(self.bool_functional_evaluator.bool_lt(constraint)),
-                "bool_lt_reif" => Arc::from(self.bool_functional_evaluator.bool_lt_reif(constraint)),
+                "bool_lt_reif" => {
+                    Arc::from(self.bool_functional_evaluator.bool_lt_reif(constraint))
+                }
                 "bool_not" => Arc::from(self.bool_functional_evaluator.bool_not(constraint)),
                 "bool_or" => Arc::from(self.bool_functional_evaluator.bool_or(constraint)),
                 "bool_xor" => Arc::from(self.bool_functional_evaluator.bool_xor(constraint)),
-                "array_set_element" => Arc::from(self.set_functional_evaluator.array_set_element(constraint)),
-                "array_var_set_element" => Arc::from(self.set_functional_evaluator.array_var_set_element(constraint)),
+                "array_set_element" => {
+                    Arc::from(self.set_functional_evaluator.array_set_element(constraint))
+                }
+                "array_var_set_element" => Arc::from(
+                    self.set_functional_evaluator
+                        .array_var_set_element(constraint),
+                ),
                 "set_card" => Arc::from(self.set_functional_evaluator.set_card(constraint)),
                 "set_diff" => Arc::from(self.set_functional_evaluator.set_diff(constraint)),
                 "set_eq" => Arc::from(self.set_functional_evaluator.set_eq(constraint)),
                 "set_eq_reif" => Arc::from(self.set_functional_evaluator.set_eq_reif(constraint)),
                 "set_in" => Arc::from(self.set_functional_evaluator.set_in(constraint)),
                 "set_in_reif" => Arc::from(self.set_functional_evaluator.set_in_reif(constraint)),
-                "set_intersect" => Arc::from(self.set_functional_evaluator.set_intersect(constraint)),
+                "set_intersect" => {
+                    Arc::from(self.set_functional_evaluator.set_intersect(constraint))
+                }
                 "set_le" => Arc::from(self.set_functional_evaluator.set_le(constraint)),
                 "set_le_reif" => Arc::from(self.set_functional_evaluator.set_le_reif(constraint)),
                 "set_lt" => Arc::from(self.set_functional_evaluator.set_lt(constraint)),
@@ -348,9 +454,13 @@ impl MiniEvaluator {
                 "set_ne" => Arc::from(self.set_functional_evaluator.set_ne(constraint)),
                 "set_ne_reif" => Arc::from(self.set_functional_evaluator.set_ne_reif(constraint)),
                 "set_subset" => Arc::from(self.set_functional_evaluator.set_subset(constraint)),
-                "set_subset_reif" => Arc::from(self.set_functional_evaluator.set_subset_reif(constraint)),
+                "set_subset_reif" => {
+                    Arc::from(self.set_functional_evaluator.set_subset_reif(constraint))
+                }
                 "set_superset" => Arc::from(self.set_functional_evaluator.set_superset(constraint)),
-                "set_superset_reif" => Arc::from(self.set_functional_evaluator.set_superset_reif(constraint)),
+                "set_superset_reif" => {
+                    Arc::from(self.set_functional_evaluator.set_superset_reif(constraint))
+                }
                 "set_symdiff" => Arc::from(self.set_functional_evaluator.set_symdiff(constraint)),
                 "set_union" => Arc::from(self.set_functional_evaluator.set_union(constraint)),
                 _ => panic!("Unsupported constraint type: {}", id),
@@ -482,7 +592,9 @@ impl MiniEvaluator {
                                     (VariableValue::Int(min_v), VariableValue::Int(max_v)),
                                 );
                             }
-                            _ => log::error!("Non-integer domain for int variable `{}`", identifier),
+                            _ => {
+                                log::error!("Non-integer domain for int variable `{}`", identifier)
+                            }
                         };
                     }
                 }
@@ -511,7 +623,10 @@ impl MiniEvaluator {
                                     (VariableValue::Float(min_v), VariableValue::Float(max_v)),
                                 );
                             }
-                            _ => log::error!("Non-floating domain for float variable `{}`", identifier),
+                            _ => log::error!(
+                                "Non-floating domain for float variable `{}`",
+                                identifier
+                            ),
                         };
                     }
                 }

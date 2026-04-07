@@ -1,12 +1,12 @@
 use crate::args_extractor::sub_types::float_args_extractor::FloatArgsExtractor;
-use crate::data_utility::lin_expression::float_lin_left_term;
+use crate::data_utility::types::Register;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::evaluator::sub_types::float_evaluator::{
-    A_TERM_INDEX, B_TERM_INDEX, C_TERM_INDEX, COEFF_LIN_CONSTR_INDEX, CONST_LIN_CONSTR_INDEX,
+    A_TERM_INDEX, B_TERM_INDEX, COEFF_LIN_CONSTR_INDEX, CONST_LIN_CONSTR_INDEX,
     R_TERM_INDEX, VARS_LIN_CONSTR_INDEX,
 };
-use crate::solution_provider::VariableValue;
-use flatzinc_serde::Array;
+use crate::data_utility::types::VariableValue;
+use flatzinc_serde::{Array, Literal};
 use std::collections::HashMap;
 
 /// Struct responsible for assigning float variables based on constraints and solutions.
@@ -18,6 +18,8 @@ use std::collections::HashMap;
 pub struct FloatVariableAssigner {
     /// An instance of `FloatArgsExtractor` used to extract arguments from float constraints.
     args_extractor: FloatArgsExtractor,
+    /// A hashmap that maps variable identifiers to their corresponding registers, used for resolving variable references in constraints.
+    variable_register_map: HashMap<String, Register>,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
     arrays: HashMap<String, Array>,
 }
@@ -30,11 +32,12 @@ impl FloatVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `FloatVariableAssigner`.
-    pub fn new(arrays: HashMap<String, Array>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>) -> Self {
         let args_extractor = FloatArgsExtractor::new();
 
         Self {
             args_extractor,
+            variable_register_map: variable_map,
             arrays,
         }
     }
@@ -49,24 +52,46 @@ impl FloatVariableAssigner {
     pub fn array_float_element(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for array_float_element");
-            if vars_identifier.contains(&defined_var) {
-                args_extractor.extract_float_element_in_array(&call, &arrays, solution)
-            } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let array: Vec<f64> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a constant array for array_float_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Float(i) => *i,
+                _ => panic!("Expected float literal in array for array_float_element constraint"),
+            })
+            .collect();
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            array[solution[index_register as usize].as_ref().expect("Missing value for register").as_float() as usize]
         })
     }
 
+    pub fn array_var_float_element(
+        &self,
+        constraint: &CallWithDefines,
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let array: Vec<String> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a variable array for array_var_float_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Identifier(i) => i.clone(),
+                _ => panic!("Expected identifier in array for array_var_float_element constraint"),
+            })
+            .collect();
+        let variable_map = self.variable_register_map.clone();
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let idx_in_array = solution[index_register as usize].as_ref().expect("Missing value for register").as_int() as usize;
+            let var_name = &array[idx_in_array];
+            let var_idx = variable_map.get(var_name).copied().expect("Array value not found") as usize;
+            
+            solution[var_idx].as_ref().expect("Missing value for register").as_float()
+        })
+    }
     /// Returns a closure that evaluates the `float_abs` constraint.
     ///
     /// # Arguments
@@ -77,21 +102,25 @@ impl FloatVariableAssigner {
     pub fn float_abs(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_abs");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.abs()
+   ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.abs()
         })
     }
 
@@ -105,22 +134,39 @@ impl FloatVariableAssigner {
     pub fn float_div(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_div");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a / b
+     ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value / b_value
         })
     }
 
@@ -134,20 +180,25 @@ impl FloatVariableAssigner {
     pub fn float_eq(
         &self,
         constraint: &CallWithDefines,       
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_eq");
-            if vars_identifier.contains(&defined_var) {
-                args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value
         })
     }
 
@@ -161,22 +212,39 @@ impl FloatVariableAssigner {
     pub fn float_max(
         &self,
         constraint: &CallWithDefines,        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_max");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.max(b)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value.max(b_value)
         })
     }
 
@@ -190,22 +258,39 @@ impl FloatVariableAssigner {
     pub fn float_min(
         &self,
         constraint: &CallWithDefines,       
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_min");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.min(b)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value.min(b_value)
         })
     }
 
@@ -219,22 +304,39 @@ impl FloatVariableAssigner {
     pub fn float_plus(
         &self,
         constraint: &CallWithDefines,        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_plus");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a + b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value + b_value
         })
     }
 
@@ -248,22 +350,39 @@ impl FloatVariableAssigner {
     pub fn float_pow(
         &self,
         constraint: &CallWithDefines,       
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_pow");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.powf(b)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value.powf(b_value)
         })
     }
 
@@ -277,23 +396,39 @@ impl FloatVariableAssigner {
     pub fn float_times(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_times");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a * b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value * b_value
         })
     }
 
@@ -307,22 +442,25 @@ impl FloatVariableAssigner {
     pub fn float_acos(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_acos");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.acos()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.acos()
         })
     }
 
@@ -336,21 +474,25 @@ impl FloatVariableAssigner {
     pub fn float_acosh(
         &self,
         constraint: &CallWithDefines,       
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_acosh");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.acosh()
+   ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.acosh()
         })
     }
 
@@ -365,22 +507,25 @@ impl FloatVariableAssigner {
     pub fn float_asin(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_asin");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.asin()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.asin()
         })
     }
 
@@ -395,22 +540,25 @@ impl FloatVariableAssigner {
     pub fn float_asinh(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_asinh");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.asinh()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.asinh()
         })
     }
 
@@ -425,22 +573,25 @@ impl FloatVariableAssigner {
     pub fn float_atan(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_atan");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.atan()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.atan()
         })
     }
 
@@ -455,22 +606,25 @@ impl FloatVariableAssigner {
     pub fn float_atanh(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_atanh");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.atanh()
+   ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.atanh()
         })
     }
 
@@ -485,22 +639,25 @@ impl FloatVariableAssigner {
     pub fn float_cos(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_cos");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.cos()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.cos()
         })
     }
 
@@ -515,22 +672,25 @@ impl FloatVariableAssigner {
     pub fn float_cosh(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_cosh");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.cosh()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.cosh()
         })
     }
 
@@ -545,22 +705,58 @@ impl FloatVariableAssigner {
     pub fn float_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_eq_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a == b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            let r_value: Option<bool>;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+               a_value == b_value
+            } else {
+                (a_value == b_value) == r_value.unwrap()
             }
         })
     }
@@ -576,22 +772,25 @@ impl FloatVariableAssigner {
     pub fn float_exp(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_exp");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.exp()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.exp()
         })
     }
 
@@ -606,22 +805,58 @@ impl FloatVariableAssigner {
     pub fn float_le_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_le_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a <= b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            let r_value: Option<bool>;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+               a_value <= b_value
+            } else {
+                (a_value <= b_value) == r_value.unwrap()
             }
         })
     }
@@ -638,33 +873,34 @@ impl FloatVariableAssigner {
     pub fn float_lin_eq(
         &self,
         constraint: &CallWithDefines,
-        
         variable: &String,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let arrays = self.arrays.clone();
-        let variable = variable.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let mut coeff = args_extractor.extract_float_coefficients_lin_expr(
-                COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                &call,
-                &arrays,
-            );
-            let term = args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-            let mut vars_involved =
-                args_extractor.extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &call, &arrays);
-            let var_idx = vars_involved.iter().position(|id| id == &variable);
-            if var_idx.is_none() {
-                let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
-                let result = left_side_term - term;
-                return result;
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let var_idx = vars_involved.iter().position(|id| id == variable)
+            .expect("Assigned variable not found in vars_involved");
+        let var_coeff = coeff[var_idx];
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let mut sum = 0f64;
+            for (i, &reg) in registers.iter().enumerate() {
+                if i != var_idx {
+                    sum += coeff[i] * solution[reg as usize].as_ref().expect("Missing value for register").as_float();
+                }
             }
-            let var_idx = var_idx.unwrap();
-            let var_coeff = coeff.remove(var_idx);
-            vars_involved.remove(var_idx);
-            let sum = float_lin_left_term(coeff, vars_involved, solution);
-            let result = (term - sum) / var_coeff;
+            let result = (constant_term - sum) / var_coeff;
             result
         })
     }
@@ -680,34 +916,50 @@ impl FloatVariableAssigner {
     pub fn float_lin_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        let arrays = self.arrays.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_lin_eq_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
-                left_side_term == term
+        let r_register = defines.as_ref().and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call))
+        } else {
+            None
+        };
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0f64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i] * solution[reg as usize].as_ref().expect("Missing value for register").as_float();
+                }
+                sum
+            };
+            let r_value: Option<bool>;
+             if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+            
+            if r_value.is_none() {
+                left_side_term == constant_term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                (left_side_term == constant_term) == r_value.unwrap()
             }
         })
     }
@@ -723,34 +975,50 @@ impl FloatVariableAssigner {
     pub fn float_lin_le_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        let arrays = self.arrays.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_lin_le_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
-                left_side_term <= term
+        let r_register = defines.as_ref().and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call))
+        } else {
+            None
+        };
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0f64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i] * solution[reg as usize].as_ref().expect("Missing value for register").as_float();
+                }
+                sum
+            };
+            let r_value: Option<bool>;
+             if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+                left_side_term <= constant_term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                (left_side_term <= constant_term) == r_value.unwrap()
             }
         })
     }
@@ -766,34 +1034,49 @@ impl FloatVariableAssigner {
     pub fn float_lin_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        let arrays = self.arrays.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_lin_lt_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
-                left_side_term < term
+        let r_register = defines.as_ref().and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call))
+        } else {
+            None
+        };
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0f64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i] * solution[reg as usize].as_ref().expect("Missing value for register").as_float();
+                }
+                sum
+            };
+            let r_value: Option<bool>;
+             if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+            if r_value.is_none() {
+                left_side_term < constant_term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                (left_side_term < constant_term) == r_value.unwrap()
             }
         })
     }
@@ -809,34 +1092,50 @@ impl FloatVariableAssigner {
     pub fn float_lin_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        let arrays = self.arrays.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_lin_ne_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
-                left_side_term != term
+        let r_register = defines.as_ref().and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call))
+        } else {
+            None
+        };
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0f64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i] * solution[reg as usize].as_ref().expect("Missing value for register").as_float();
+                }
+                sum
+            };
+           let r_value: Option<bool>;
+             if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+            
+            if r_value.is_none() {
+                left_side_term != constant_term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                (left_side_term != constant_term) == r_value.unwrap()
             }
         })
     }
@@ -852,22 +1151,25 @@ impl FloatVariableAssigner {
     pub fn float_ln(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_ln");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.ln()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.ln()
         })
     }
 
@@ -882,22 +1184,25 @@ impl FloatVariableAssigner {
     pub fn float_log10(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_log10");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.log10()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.log10()
         })
     }
 
@@ -912,22 +1217,25 @@ impl FloatVariableAssigner {
     pub fn float_log2(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_log2");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.log2()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.log2()
         })
     }
 
@@ -942,22 +1250,58 @@ impl FloatVariableAssigner {
     pub fn float_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_lt_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a < b
+     ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            let r_value: Option<bool>;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+               a_value < b_value
+            } else {
+                (a_value < b_value) == r_value.unwrap()
             }
         })
     }
@@ -973,22 +1317,58 @@ impl FloatVariableAssigner {
     pub fn float_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_ne_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a != b
+     ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            let r_value: Option<bool>;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(solution[r_register.unwrap() as usize].as_ref().expect("Missing value for register").as_bool());
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            }else{
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+               a_value != b_value
+            } else {
+                (a_value != b_value) == r_value.unwrap()
             }
         })
     }
@@ -1004,22 +1384,25 @@ impl FloatVariableAssigner {
     pub fn float_sin(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_sin");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.sin()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.sin()
         })
     }
 
@@ -1034,22 +1417,25 @@ impl FloatVariableAssigner {
     pub fn float_sinh(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_sinh");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.sinh()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.sinh()
         })
     }
 
@@ -1064,22 +1450,25 @@ impl FloatVariableAssigner {
     pub fn float_sqrt(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_sqrt");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.sqrt()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.sqrt()
         })
     }
 
@@ -1094,22 +1483,25 @@ impl FloatVariableAssigner {
     pub fn float_tan(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_tan");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.tan()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.tan()
         })
     }
 
@@ -1124,22 +1516,25 @@ impl FloatVariableAssigner {
     pub fn float_tanh(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for float_tanh");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.tanh()
+   ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_float();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.tanh()
         })
     }
 
@@ -1155,21 +1550,25 @@ impl FloatVariableAssigner {
         &self,
         constraint: &CallWithDefines,
         
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int2float");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a as f64
+   ) -> Box<dyn Fn(&[Option<VariableValue>]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_int_value(A_TERM_INDEX, &constraint.call));
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_ref().expect("Missing value for register").as_int();
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value as f64
         })
     }
 }

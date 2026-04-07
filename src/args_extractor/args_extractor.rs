@@ -1,12 +1,8 @@
-use crate::solution_provider::VariableValue;
 use flatzinc_serde::{Argument, Array, Constraint, Literal};
 use std::collections::HashMap;
 
-pub const ARRAY_IDX_INDEX: usize = 0;
-pub const TERM_INDEX: usize = 2;
-
 #[derive(Debug, Clone, Default)]
-/// A helper struct for extracting arguments from constraints, 
+/// A helper struct for extracting arguments from constraints,
 /// providing common methods for handling literals, identifiers, and arrays in the context of constraint evaluation.
 pub struct ArgsExtractor {}
 
@@ -155,41 +151,6 @@ impl ArgsExtractor {
         vars_involved
     }
 
-    /// Extracts an integer value from an array element in the constraint.
-    ///
-    /// # Arguments
-    /// * `constraint` - The constraint call containing the argument.
-    /// * `arrays` - A map of identifiers to arrays for resolving array references.
-    /// * `solution` - The solution map for resolving identifiers.
-    ///
-    /// # Returns
-    /// The extracted integer value from the array element.
-    pub fn extract_int_array_element(
-        &self,
-        constraint: &Constraint,
-        arrays: &HashMap<String, Array>,
-        solution: &HashMap<String, VariableValue>,
-    ) -> i64 {
-        let idx = self.extract_int_value(self.extract_term(constraint, ARRAY_IDX_INDEX), solution);
-        let idx_usize = (idx - 1) as usize;
-
-        let array = self.extract_array(constraint, arrays);
-
-        match array.contents.get(idx_usize) {
-            Some(Literal::Int(v)) => *v,
-            Some(Literal::Identifier(id)) => match solution.get(id) {
-                Some(VariableValue::Int(v)) => *v,
-                Some(other) => panic!("Expected int for variable `{}`, found {:?}", id, other),
-                None => panic!("Missing value for variable `{}` referenced in array", id),
-            },
-            Some(other) => panic!(
-                "Expected int or identifier in array at index {}, found {:?}",
-                idx, other
-            ),
-            None => panic!("No value present in array at index {} (out of bounds)", idx),
-        }
-    }
-
     /// Extracts integer coefficients from a linear expression in the constraint.
     ///
     /// # Arguments
@@ -237,27 +198,6 @@ impl ArgsExtractor {
         coeff
     }
 
-    /// Extracts the integer constant term from a linear expression in the constraint.
-    ///
-    /// # Arguments
-    /// * `constraint` - The constraint call containing the linear expression.
-    ///
-    /// # Returns
-    /// The integer constant term from the linear expression.
-    pub fn extract_int_constant_term_lin_expr(&self, constraint: &Constraint) -> i64 {
-        constraint
-            .args
-            .get(TERM_INDEX)
-            .and_then(|arg| match arg {
-                Argument::Literal(lit) => match lit {
-                    Literal::Int(v) => Some(*v),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .unwrap_or_default()
-    }
-
     /// Extracts an integer value from a literal or identifier.
     ///
     /// # Arguments
@@ -266,18 +206,9 @@ impl ArgsExtractor {
     ///
     /// # Returns
     /// The extracted integer value.
-    pub fn extract_int_value(
-        &self,
-        literal: Literal,
-        solution: &HashMap<String, VariableValue>,
-    ) -> i64 {
+    pub fn extract_int_value(&self, literal: Literal) -> i64 {
         match literal {
             Literal::Int(v) => v,
-            Literal::Identifier(i) => match solution.get(&i) {
-                Some(VariableValue::Int(v)) => *v,
-                Some(_) => panic!("Variable {} is not int", i),
-                None => panic!("Variable {} not found in solution", i),
-            },
             _ => panic!("Literal {:?} is not int neither identifier", literal),
         }
     }
@@ -290,19 +221,10 @@ impl ArgsExtractor {
     ///
     /// # Returns
     /// The extracted boolean value.
-    pub fn extract_bool_value(
-        &self,
-        literal: Literal,
-        solution: &HashMap<String, VariableValue>,
-    ) -> bool {
+    pub fn extract_bool_value(&self, literal: Literal) -> bool {
         match literal {
             Literal::Bool(v) => v,
-            Literal::Identifier(i) => match solution.get(&i) {
-                Some(VariableValue::Bool(v)) => *v,
-                Some(_) => panic!("Variable {} is not bool", i),
-                None => panic!("Variable {} not found in solution", i),
-            },
-            _ => panic!("Literal {:?} is not bool neither identifier", literal),
+            _ => panic!("Literal {:?} is not bool", literal),
         }
     }
 
@@ -323,33 +245,6 @@ impl ArgsExtractor {
         match arg {
             Argument::Literal(lit) => lit.clone(),
             _ => panic!("no elements found in args for constraint: {:?}", constraint),
-        }
-    }
-
-    /// Extracts an array from the constraint using the identifier at argument index 1.
-    ///
-    /// # Arguments
-    /// * `constraint` - The constraint call containing the argument.
-    /// * `arrays` - A map of identifiers to arrays for resolving array references.
-    ///
-    /// # Returns
-    /// A reference to the extracted `Array`.
-    pub fn extract_array<'a>(
-        &self,
-        constraint: &Constraint,
-        arrays: &'a HashMap<String, Array>,
-    ) -> &'a Array {
-        match self.extract_term(constraint, 1) {
-            Literal::Identifier(id) => arrays.get(&id).unwrap_or_else(|| {
-                panic!(
-                    "Array {:?} not found for identifier used in constraint {:?}",
-                    id, constraint
-                )
-            }),
-            other => panic!(
-                "Expected Identifier for array at args[1], found {:?} in constraint {:?}",
-                other, constraint
-            ),
         }
     }
 }

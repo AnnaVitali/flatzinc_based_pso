@@ -1,13 +1,12 @@
 use crate::args_extractor::sub_types::int_args_extractor::IntArgsExtractor;
-use crate::data_utility::lin_expression::int_lin_left_term;
+use crate::data_utility::types::Register;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::evaluator::sub_types::int_evaluator::{
-    A_TERM_INDEX, B_TERM_INDEX, C_TERM_INDEX, COEFF_LIN_CONSTR_INDEX, CONST_LIN_CONSTR_INDEX,
-    R_TERM_INDEX, VARS_LIN_CONSTR_INDEX,
+    A_TERM_INDEX, B_TERM_INDEX, COEFF_LIN_CONSTR_INDEX, CONST_LIN_CONSTR_INDEX, R_TERM_INDEX,
+    VARS_LIN_CONSTR_INDEX,
 };
-use crate::solution_provider::VariableValue;
-use flatzinc_serde::Array;
-use std::cmp::{max, min};
+use crate::data_utility::types::VariableValue;
+use flatzinc_serde::{Array, Literal};
 use std::collections::HashMap;
 
 /// Struct responsible for assigning integer variables based on constraints and solutions.
@@ -19,6 +18,8 @@ use std::collections::HashMap;
 pub struct IntVariableAssigner {
     /// An instance of `IntArgsExtractor` used to extract arguments from integer constraints.
     args_extractor: IntArgsExtractor,
+    /// A hashmap that maps variable identifiers to their corresponding registers, used for resolving variable references in constraints.
+    variable_register_map: HashMap<String, Register>,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
     arrays: HashMap<String, Array>,
 }
@@ -31,11 +32,12 @@ impl IntVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `IntVariableAssigner`.
-    pub fn new(arrays: HashMap<String, Array>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>) -> Self {
         let args_extractor = IntArgsExtractor::new();
 
         Self {
             args_extractor,
+            variable_register_map: variable_map,
             arrays,
         }
     }
@@ -50,22 +52,74 @@ impl IntVariableAssigner {
     pub fn array_int_element(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self
+            .variable_register_map
+            .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+            .copied()
+            .expect("Index register not found");
+        let array: Vec<i64> = self
+            .arrays
+            .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+            .expect("Expect a constant array for array_int_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Int(i) => *i,
+                _ => panic!("Expected int literal in array for array_int_element constraint"),
+            })
+            .collect();
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            array[solution[index_register as usize]
                 .as_ref()
-                .expect("Expected a defined variable for array_int_element");
-            if vars_identifier.contains(&defined_var) {
-                args_extractor.extract_int_element_array(&call, &arrays, solution)
-            } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+                .expect("Missing value for register")
+                .as_int() as usize]
+        })
+    }
+
+    pub fn array_var_int_element(
+        &self,
+        constraint: &CallWithDefines,
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self
+            .variable_register_map
+            .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+            .copied()
+            .expect("Index register not found");
+        let array: Vec<String> = self
+            .arrays
+            .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+            .expect("Expect a variable array for array_var_int_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Identifier(i) => i.clone(),
+                _ => panic!("Expected identifier in array for array_var_int_element constraint"),
+            })
+            .collect();
+        let variable_map = self.variable_register_map.clone();
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let idx_in_array = solution[index_register as usize]
+                .as_ref()
+                .expect("Missing value for register")
+                .as_int() as usize;
+            let var_name = &array[idx_in_array];
+            let var_idx = variable_map
+                .get(var_name)
+                .copied()
+                .expect("Array value not found") as usize;
+
+            solution[var_idx]
+                .as_ref()
+                .expect("Missing value for register")
+                .as_int()
         })
     }
 
@@ -79,22 +133,36 @@ impl IntVariableAssigner {
     pub fn int_abs(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_abs");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.abs()
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some() {
+                a_value = solution[a_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
             } else {
-                args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value.abs()
         })
     }
 
@@ -108,23 +176,59 @@ impl IntVariableAssigner {
     pub fn int_div(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_div");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a / b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some() {
+                a_value = solution[a_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
+            a_value / b_value
         })
     }
 
@@ -138,21 +242,36 @@ impl IntVariableAssigner {
     pub fn int_eq(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_eq");
-            if vars_identifier.contains(&defined_var) {
-                args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            if a_register.is_some() {
+                a_value = solution[a_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
             } else {
-                args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+
+            a_value
         })
     }
 
@@ -166,25 +285,89 @@ impl IntVariableAssigner {
     pub fn int_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_eq_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a == b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else if b_register.is_none() {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self
+                .variable_register_map
+                .get(vars_involved.get(&R_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            r_const = Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            let r_value: Option<bool>;
+            if a_register.is_some() {
+                a_value = solution[a_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                (a == b) == r
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(
+                    solution[r_register.unwrap() as usize]
+                        .as_ref()
+                        .expect("Missing value for register")
+                        .as_bool(),
+                );
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            } else {
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+                a_value == b_value
+            } else {
+                (a_value == b_value) == r_value.unwrap()
             }
         })
     }
@@ -199,25 +382,89 @@ impl IntVariableAssigner {
     pub fn int_le_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_le_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a <= b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else if b_register.is_none() {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self
+                .variable_register_map
+                .get(vars_involved.get(&R_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            r_const = Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value;
+            let b_value;
+            let r_value: Option<bool>;
+            if a_register.is_some() {
+                a_value = solution[a_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                (a <= b) == r
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize]
+                    .as_ref()
+                    .expect("Missing value for register")
+                    .as_int();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(
+                    solution[r_register.unwrap() as usize]
+                        .as_ref()
+                        .expect("Missing value for register")
+                        .as_bool(),
+                );
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            } else {
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+                a_value <= b_value
+            } else {
+                (a_value <= b_value) == r_value.unwrap()
             }
         })
     }
@@ -233,33 +480,48 @@ impl IntVariableAssigner {
     pub fn int_lin_eq(
         &self,
         constraint: &CallWithDefines,
-        
         variable: &String,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
-        let variable = variable.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let mut coeff = args_extractor.extract_int_coefficients_lin_expr(
-                COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                &call,
-                &arrays,
-            );
-            let mut vars_involved =
-                args_extractor.extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &call, &arrays);
-            let var_idx = vars_involved.iter().position(|id| id == &variable);
-            let term = args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-            if var_idx.is_none() {
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                let result = left_side_term - term;
-                return result;
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let coeff = self.args_extractor.extract_int_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
+            VARS_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self
+                .variable_register_map
+                .get(var)
+                .copied()
+                .expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let var_idx = vars_involved
+            .iter()
+            .position(|id| id == variable)
+            .expect("Assigned variable not found in vars_involved");
+        let var_coeff = coeff[var_idx];
+        let constant_term: i64 = self
+            .args_extractor
+            .extract_int_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let mut sum = 0i64;
+            for (i, &reg) in registers.iter().enumerate() {
+                if i != var_idx {
+                    sum += coeff[i]
+                        * solution[reg as usize]
+                            .as_ref()
+                            .expect("Missing value for register")
+                            .as_int();
+                }
             }
-            let var_idx = var_idx.unwrap();
-            let var_coeff = coeff.remove(var_idx);
-            vars_involved.remove(var_idx);
-            let sum = int_lin_left_term(coeff, vars_involved, solution);
-            let result = (term - sum) / var_coeff;
+            let result = (constant_term - sum) / var_coeff;
             result
         })
     }
@@ -274,48 +536,71 @@ impl IntVariableAssigner {
     pub fn int_lin_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_int_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
+            VARS_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self
+                .variable_register_map
+                .get(var)
+                .copied()
+                .expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_lin_eq_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
+        let r_register = defines
+            .as_ref()
+            .and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            )
+        } else {
+            None
+        };
+        let constant_term: i64 = self
+            .args_extractor
+            .extract_int_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0i64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i]
+                        * solution[reg as usize]
+                            .as_ref()
+                            .expect("Missing value for register")
+                            .as_int();
+                }
+                sum
+            };
+            let r_value: Option<bool>;
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(
+                    solution[r_register.unwrap() as usize]
+                        .as_ref()
+                        .expect("Missing value for register")
+                        .as_bool(),
                 );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                left_side_term == term
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
             } else {
-                let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                (left_side_term == term) == r
+                r_value = None;
+            }
+            if r_value.is_none() {
+                left_side_term == constant_term
+            } else {
+                (left_side_term == constant_term) == r_value.unwrap()
             }
         })
     }
@@ -330,48 +615,71 @@ impl IntVariableAssigner {
     pub fn int_lin_le_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_int_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
+            VARS_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self
+                .variable_register_map
+                .get(var)
+                .copied()
+                .expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_lin_le_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
+        let r_register = defines
+            .as_ref()
+            .and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            )
+        } else {
+            None
+        };
+        let constant_term: i64 = self
+            .args_extractor
+            .extract_int_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0i64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i]
+                        * solution[reg as usize]
+                            .as_ref()
+                            .expect("Missing value for register")
+                            .as_int();
+                }
+                sum
+            };
+            let r_value: Option<bool>;
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(
+                    solution[r_register.unwrap() as usize]
+                        .as_ref()
+                        .expect("Missing value for register")
+                        .as_bool(),
                 );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                left_side_term <= term
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
             } else {
-                let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                (left_side_term <= term) == r
+                r_value = None;
+            }
+            if r_value.is_none() {
+                left_side_term <= constant_term
+            } else {
+                (left_side_term <= constant_term) == r_value.unwrap()
             }
         })
     }
@@ -386,48 +694,71 @@ impl IntVariableAssigner {
     pub fn int_lin_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let coeff = self.args_extractor.extract_int_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
+            VARS_LIN_CONSTR_INDEX,
+            &constraint.call,
+            &self.arrays,
+        );
+        let mut registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self
+                .variable_register_map
+                .get(var)
+                .copied()
+                .expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
         let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_lin_ne_reif");
-            if vars_identifier.contains(&defined_var) {
-                let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
+        let r_register = defines
+            .as_ref()
+            .and_then(|r| self.variable_register_map.get(r).copied());
+        let r_const = if r_register.is_none() {
+            Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            )
+        } else {
+            None
+        };
+        let constant_term: i64 = self
+            .args_extractor
+            .extract_int_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let left_side_term = {
+                let mut sum = 0i64;
+                for (i, &reg) in registers.iter().enumerate() {
+                    sum += coeff[i]
+                        * solution[reg as usize]
+                            .as_ref()
+                            .expect("Missing value for register")
+                            .as_int();
+                }
+                sum
+            };
+            let r_value: Option<bool>;
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(
+                    solution[r_register.unwrap() as usize]
+                        .as_ref()
+                        .expect("Missing value for register")
+                        .as_bool(),
                 );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                left_side_term != term
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
             } else {
-                let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
-                    &call,
-                    &arrays,
-                );
-                let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
-                (left_side_term != term) == r
+                r_value = None;
+            }
+            if r_value.is_none() {
+                left_side_term != constant_term
+            } else {
+                (left_side_term != constant_term) == r_value.unwrap()
             }
         })
     }
@@ -442,25 +773,86 @@ impl IntVariableAssigner {
     pub fn int_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_lt_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a < b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else if b_register.is_none() {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self
+                .variable_register_map
+                .get(vars_involved.get(&R_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            r_const = Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                (a < b) == r
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+            let r_value: Option<bool> = if let Some(r_reg) = r_register {
+                Some(
+                    solution[r_reg as usize]
+                        .as_ref()
+                        .expect("Missing value for r_register")
+                        .as_bool(),
+                )
+            } else if let Some(r_c) = r_const {
+                Some(r_c)
+            } else {
+                None
+            };
+
+            if r_value.is_none() {
+                a_value < b_value
+            } else {
+                (a_value < b_value) == r_value.unwrap()
             }
         })
     }
@@ -475,23 +867,57 @@ impl IntVariableAssigner {
     pub fn int_max(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_max");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                max(a, b)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+
+            a_value.max(b_value)
         })
     }
 
@@ -505,23 +931,57 @@ impl IntVariableAssigner {
     pub fn int_min(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_min");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                min(a, b)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+
+            a_value.min(b_value)
         })
     }
 
@@ -535,23 +995,57 @@ impl IntVariableAssigner {
     pub fn int_mod(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_mod");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a % b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+
+            a_value % b_value
         })
     }
 
@@ -565,25 +1059,87 @@ impl IntVariableAssigner {
     pub fn int_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> bool + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_ne_reif");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a != b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> bool + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else if b_register.is_none() {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self
+                .variable_register_map
+                .get(vars_involved.get(&R_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            r_const = Some(
+                self.args_extractor
+                    .extract_bool_value(R_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
-                (a != b) == r
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+            let r_value: Option<bool>;
+            if r_register.is_some() && solution[r_register.unwrap() as usize].is_some() {
+                r_value = Some(
+                    solution[r_register.unwrap() as usize]
+                        .as_ref()
+                        .expect("Missing value for register")
+                        .as_bool(),
+                );
+            } else if r_const.is_some() {
+                r_value = Some(r_const.expect("Expected constant value for R_TERM"));
+            } else {
+                r_value = None;
+            }
+
+            if r_value.is_none() {
+                a_value != b_value
+            } else {
+                (a_value != b_value) == r_value.unwrap()
             }
         })
     }
@@ -598,23 +1154,57 @@ impl IntVariableAssigner {
     pub fn int_pow(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_pow");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a.pow(b as u32)
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+
+            a_value.pow(b_value as u32)
         })
     }
 
@@ -628,23 +1218,56 @@ impl IntVariableAssigner {
     pub fn int_times(
         &self,
         constraint: &CallWithDefines,
-        
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> i64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let call = constraint.call.clone();
-        let defines = constraint.defines.clone();
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let vars_identifier = args_extractor.extract_literal_identifiers(&call.args);
-            let defined_var = defines
-                .as_ref()
-                .expect("Expected a defined variable for int_times");
-            if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
-                a * b
+    ) -> Box<dyn Fn(&[Option<VariableValue>]) -> i64 + Send + Sync> {
+        let vars_involved = self
+            .args_extractor
+            .extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self
+                .variable_register_map
+                .get(vars_involved.get(&A_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            a_const = Some(
+                self.args_extractor
+                    .extract_int_value(A_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self
+                .variable_register_map
+                .get(vars_involved.get(&B_TERM_INDEX).unwrap())
+                .copied();
+        } else {
+            b_const = Some(
+                self.args_extractor
+                    .extract_int_value(B_TERM_INDEX, &constraint.call),
+            );
+        }
+
+        Box::new(move |solution: &[Option<VariableValue>]| {
+            let a_value = if let Some(a_reg) = a_register {
+                solution[a_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for a_register")
+                    .as_int()
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
-            }
+                a_const.expect("Expected constant value for A_TERM")
+            };
+            let b_value = if let Some(b_reg) = b_register {
+                solution[b_reg as usize]
+                    .as_ref()
+                    .expect("Missing value for b_register")
+                    .as_int()
+            } else {
+                b_const.expect("Expected constant value for B_TERM")
+            };
+            a_value * b_value
         })
     }
 }

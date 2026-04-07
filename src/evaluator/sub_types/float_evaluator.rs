@@ -1,6 +1,6 @@
 use crate::data_utility::types::Register;
 use crate::{args_extractor::sub_types::float_args_extractor::FloatArgsExtractor, data_utility::logger::write_verbose_output};
-use crate::solution_provider::VariableValue;
+use crate::data_utility::types::VariableValue;
 use flatzinc_serde::{Array, Literal};
 use log::info;
 use std::collections::HashMap;
@@ -23,7 +23,8 @@ pub const FLOAT_EQ_TOLERANCE: f64 = 1e-4;
 pub struct FloatEvaluator {
     /// Map of array identifiers to their values.
     arrays: HashMap<String, Array>,
-    variable_map: HashMap<String, Register>,
+    /// Map of variable identifiers to their registers, used for resolving variable references in constraints.
+    variable_register_map: HashMap<String, Register>,
     /// Helper for extracting float arguments from constraints.
     args_extractor: FloatArgsExtractor,
     /// If true, enables verbose logging of constraint violations.
@@ -45,7 +46,7 @@ impl FloatEvaluator {
         let args_extractor = FloatArgsExtractor::new();
         Self {
             arrays,
-            variable_map,
+            variable_register_map: variable_map,
             args_extractor,
             verbose,
         }
@@ -64,7 +65,7 @@ impl FloatEvaluator {
         constraint: &CallWithDefines,
     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
-        let index_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let index_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
         let array: Vec<f64> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a constant array for array_float_element constraint")
             .contents
             .iter()
@@ -73,7 +74,7 @@ impl FloatEvaluator {
                 _ => panic!("Expected float literal in array for array_float_element constraint"),
             })
             .collect();
-        let value_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX.try_into().unwrap()).unwrap()).copied().expect("Value register not found");
+        let value_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied().expect("Value register not found");
         let verbose = self.verbose;
 
         Box::new(move |solution: &[VariableValue]| {
@@ -95,7 +96,7 @@ impl FloatEvaluator {
         constraint: &CallWithDefines,
      ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
-        let index_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let index_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
         let array: Vec<String> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a variable array for array_var_float_element constraint")
             .contents
             .iter()
@@ -104,9 +105,9 @@ impl FloatEvaluator {
                 _ => panic!("Expected identifier in array for array_var_float_element constraint"),
             })
             .collect();
-        let value_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied().expect("Value register not found");
+        let value_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied().expect("Value register not found");
         let verbose = self.verbose;
-        let variable_map = self.variable_map.clone();
+        let variable_map = self.variable_register_map.clone();
 
         Box::new(move |solution: &[VariableValue]| {
             let idx_in_array = solution[index_register as usize].as_int() as usize;
@@ -143,16 +144,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -198,16 +199,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -252,16 +253,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -305,16 +306,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -352,16 +353,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -406,16 +407,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -453,16 +454,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -514,16 +515,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -561,16 +562,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -615,25 +616,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
         
         let mut c_register = None;
         let mut c_const = None;
         if vars_involved.get(&C_TERM_INDEX).is_some() {
-            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+            c_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
         }else{
-            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call));
         }
 
 
@@ -690,16 +691,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -743,25 +744,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
 
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         let mut r_register = None;
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
-            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -812,16 +813,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -860,16 +861,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -912,25 +913,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
 
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         let mut r_register = None;
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
-            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -977,19 +978,19 @@ impl FloatEvaluator {
    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
 
         Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
@@ -1020,26 +1021,26 @@ impl FloatEvaluator {
     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
         let mut r_register = None;
         let mut r_const = None;
         if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
-            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call));
         }
         
         Box::new(move |solution: &[VariableValue]| {
@@ -1076,19 +1077,19 @@ impl FloatEvaluator {
     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
 
         Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
@@ -1119,26 +1120,26 @@ impl FloatEvaluator {
         ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
         let mut r_register = None;
         let mut r_const = None;
         if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
-            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call));
         }
         
         Box::new(move |solution: &[VariableValue]| {
@@ -1176,19 +1177,19 @@ impl FloatEvaluator {
     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
 
         Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
@@ -1219,26 +1220,26 @@ impl FloatEvaluator {
    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
         let mut r_register = None;
         let mut r_const = None;
         if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
-            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call));
         }
         
         Box::new(move |solution: &[VariableValue]| {
@@ -1276,19 +1277,19 @@ impl FloatEvaluator {
     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
 
         Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
@@ -1319,26 +1320,26 @@ impl FloatEvaluator {
     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            COEFF_LIN_CONSTR_INDEX,
             &constraint.call,
             &self.arrays,
         );
         let vars_involved = self
             .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &self.arrays);
         let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let mut  registers = Vec::new();
         for var in &vars_involved {
-            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            let reg = self.variable_register_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
-        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
         let mut r_register = None;
         let mut r_const = None;
         if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
-            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call));
         }
         
        Box::new(move |solution: &[VariableValue]| {
@@ -1379,16 +1380,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1433,16 +1434,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1487,16 +1488,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1541,16 +1542,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1595,24 +1596,24 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         let mut r_register = None;
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
-            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1662,25 +1663,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
         
         let mut c_register = None;
         let mut c_const = None;
         if vars_involved.get(&C_TERM_INDEX).is_some() {
-            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+            c_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
         }else{
-            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call));
         }
 
 
@@ -1732,25 +1733,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
         
         let mut c_register = None;
         let mut c_const = None;
         if vars_involved.get(&C_TERM_INDEX).is_some() {
-            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+            c_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
         }else{
-            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call));
         }
 
 
@@ -1802,17 +1803,17 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1856,25 +1857,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
 
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else if b_register.is_none() {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         let mut r_register = None;
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
-            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+            r_register = self.variable_register_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
         }else {
-            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -1924,25 +1925,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
         
         let mut c_register = None;
         let mut c_const = None;
         if vars_involved.get(&C_TERM_INDEX).is_some() {
-            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+            c_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
         }else{
-            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call));
         }
 
 
@@ -1994,25 +1995,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
         
         let mut c_register = None;
         let mut c_const = None;
         if vars_involved.get(&C_TERM_INDEX).is_some() {
-            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+            c_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
         }else{
-            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call));
         }
 
 
@@ -2064,16 +2065,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -2118,16 +2119,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -2172,16 +2173,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -2226,16 +2227,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -2280,16 +2281,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -2334,25 +2335,25 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else{
-           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call));
         }
     
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else{
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
         
         let mut c_register = None;
         let mut c_const = None;
         if vars_involved.get(&C_TERM_INDEX).is_some() {
-            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+            c_register = self.variable_register_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
         }else{
-            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call));
         }
 
 
@@ -2404,16 +2405,16 @@ impl FloatEvaluator {
         let mut a_register = None;
         let mut a_const = None;
         if vars_involved.get(&A_TERM_INDEX).is_some() {
-            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+            a_register = self.variable_register_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
         }else {
-           a_const = Some(self.args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+           a_const = Some(self.args_extractor.extract_int_value(A_TERM_INDEX, &constraint.call));
         }
         let mut b_register = None;
         let mut b_const = None;
         if vars_involved.get(&B_TERM_INDEX).is_some() {
-            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+            b_register = self.variable_register_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
         }else {
-            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call));
         }
 
         Box::new(move |solution: &[VariableValue]| {
@@ -2459,10 +2460,5 @@ impl FloatEvaluator {
             })
             .sum();
         left_side_term
-    }
-
-    #[inline]
-    fn identifier_from_vars(&self, vars: &HashMap<i64, String>, index: usize) -> Option<String> {
-        vars.get(&(index as i64)).map(|id| id.to_string())
     }
 }
