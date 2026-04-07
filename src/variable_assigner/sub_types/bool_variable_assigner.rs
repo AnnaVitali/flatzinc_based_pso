@@ -58,22 +58,22 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for array_bool_and");
             if vars_identifier.contains(&defined_var) {
-                let as_array = args_extractor.extract_bool_array(
-                    AS_ARRAY_INDEX,
+                let as_array = args_extractor.extract_bool_array_name(
+                    AS_ARRAY_INDEX.try_into().unwrap(),
                     &arrays,
                     &call,
                     solution,
                 );
                 as_array.iter().all(|&item| item)
             } else {
-                let as_array = args_extractor.extract_bool_array(
-                    AS_ARRAY_INDEX,
+                let as_array = args_extractor.extract_bool_array_name(
+                    AS_ARRAY_INDEX.try_into().unwrap(),
                     &arrays,
                     &call,
                     solution,
                 );
                 let r = args_extractor.extract_bool_value(
-                    B_TERM_INDEX,
+                    B_TERM_INDEX.try_into().unwrap(),
                     &call,
                     solution,
                 );
@@ -98,7 +98,7 @@ impl BoolVariableAssigner {
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             args_extractor.extract_bool_element_array(
-                AS_ARRAY_INDEX,
+                AS_ARRAY_INDEX.try_into().unwrap(),
                 &call,
                 &arrays,
                 solution,
@@ -126,11 +126,11 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_and");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a && b
             } else {
-                args_extractor.extract_bool_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -150,14 +150,14 @@ impl BoolVariableAssigner {
         let arrays = self.arrays.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let as_array = args_extractor.extract_bool_array(
-                AS_ARRAY_INDEX,
+            let as_array = args_extractor.extract_bool_array_name(
+                AS_ARRAY_INDEX.try_into().unwrap(),
                 &arrays,
                 &call,
                 solution,
             );
             let bs_array = args_extractor.extract_bool_defined_elements_array(
-                BS_ARRAY_INDEX,
+                BS_ARRAY_INDEX.try_into().unwrap(),
                 &arrays,
                 &call,
                 solution,
@@ -186,10 +186,10 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_eq");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a
             } else {
-                args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -214,10 +214,10 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_not");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 !a
             } else {
-                args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -242,11 +242,11 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_eq_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a == b
             } else {
-                args_extractor.extract_bool_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -271,11 +271,11 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_le_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a <= b
             } else {
-                args_extractor.extract_bool_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -300,11 +300,11 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_lt_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a < b
             } else {
-                args_extractor.extract_bool_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -329,11 +329,11 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_or");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a || b
             } else {
-                args_extractor.extract_bool_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -358,11 +358,11 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool_xor");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_bool_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a ^ b
             } else {
-                args_extractor.extract_bool_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -387,10 +387,10 @@ impl BoolVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for bool2int");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_bool_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a as i64
             } else {
-                args_extractor.extract_int_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }

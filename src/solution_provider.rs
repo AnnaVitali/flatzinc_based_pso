@@ -1,7 +1,9 @@
 use crate::ozn_parser::ozn_parser::{OznMapping, OznParser};
 use flatzinc_serde::{Array, Domain, FlatZinc, Literal, Type};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::path::Path;
+use crate::data_utility::types::Register;
 
 #[derive(Debug, Clone, Default)]
 /// A struct responsible for providing solutions to variables defined in a FlatZinc model, based on the model's output specifications 
@@ -65,6 +67,8 @@ impl SolutionProvider {
         
         let mut ozn_parser = OznParser::new();
         ozn_parser.parse(ozn);
+
+       
 
         Self {
             fzn,
@@ -344,4 +348,54 @@ pub enum VariableValue {
     Float(f64),
     Bool(bool),
     Set(HashSet<i64>),
+}
+
+impl From<i64> for VariableValue {
+    fn from(value: i64) -> Self {
+        VariableValue::Int(value)
+    }
+}
+
+impl From<f64> for VariableValue {
+    fn from(value: f64) -> Self {
+        VariableValue::Float(value)
+    }
+}
+
+impl VariableValue {
+    pub fn as_int(&self) -> i64 {
+        match self {
+            VariableValue::Int(value) => *value,
+            VariableValue::Float(_) => unreachable!(),
+            VariableValue::Bool(_) => unreachable!(),
+            VariableValue::Set(_) => unreachable!(),
+        }
+    }
+
+    pub fn as_float(&self) -> f64 {
+        match self {
+            VariableValue::Float(value) => *value,
+            VariableValue::Int(_) => unreachable!(),
+            VariableValue::Bool(_) => unreachable!(),
+            VariableValue::Set(_) => unreachable!(),
+        }
+    }
+
+    pub fn as_bool(&self) -> bool {
+        match self {
+            VariableValue::Bool(value) => *value,
+            VariableValue::Int(_) => unreachable!(),
+            VariableValue::Float(_) => unreachable!(),
+            VariableValue::Set(_) => unreachable!(),
+        }
+    }
+
+    pub fn as_set(&self) -> HashSet<i64> {
+        match self {
+            VariableValue::Set(set) => set.clone(),
+            VariableValue::Int(_) => unreachable!(),
+            VariableValue::Float(_) => unreachable!(),
+            VariableValue::Bool(_) => unreachable!(),
+        }
+    }
 }

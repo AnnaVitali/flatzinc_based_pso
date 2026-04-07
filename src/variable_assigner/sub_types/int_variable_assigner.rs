@@ -64,7 +64,7 @@ impl IntVariableAssigner {
             if vars_identifier.contains(&defined_var) {
                 args_extractor.extract_int_element_array(&call, &arrays, solution)
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -90,10 +90,10 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_abs");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.abs()
             } else {
-                args_extractor.extract_int_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -119,11 +119,11 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_div");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a / b
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -149,9 +149,9 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_eq");
             if vars_identifier.contains(&defined_var) {
-                args_extractor.extract_int_value(A_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution)
             } else {
-                args_extractor.extract_int_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -177,13 +177,13 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_eq_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a == b
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 (a == b) == r
             }
         })
@@ -210,13 +210,13 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_le_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a <= b
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 (a <= b) == r
             }
         })
@@ -242,14 +242,14 @@ impl IntVariableAssigner {
         let variable = variable.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut coeff = args_extractor.extract_int_coefficients_lin_expr(
-                COEFF_LIN_CONSTR_INDEX,
+                COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                 &call,
                 &arrays,
             );
             let mut vars_involved =
-                args_extractor.extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &call, &arrays);
+                args_extractor.extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &call, &arrays);
             let var_idx = vars_involved.iter().position(|id| id == &variable);
-            let term = args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+            let term = args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
             if var_idx.is_none() {
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 let result = left_side_term - term;
@@ -287,33 +287,33 @@ impl IntVariableAssigner {
                 .expect("Expected a defined variable for int_lin_eq_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 left_side_term == term
             } else {
                 let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 (left_side_term == term) == r
             }
@@ -343,33 +343,33 @@ impl IntVariableAssigner {
                 .expect("Expected a defined variable for int_lin_le_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 left_side_term <= term
             } else {
                 let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 (left_side_term <= term) == r
             }
@@ -399,33 +399,33 @@ impl IntVariableAssigner {
                 .expect("Expected a defined variable for int_lin_ne_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 left_side_term != term
             } else {
                 let coeff = args_extractor.extract_int_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                    args_extractor.extract_int_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = int_lin_left_term(coeff, vars_involved, solution);
                 (left_side_term != term) == r
             }
@@ -453,13 +453,13 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_lt_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a < b
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 (a < b) == r
             }
         })
@@ -486,11 +486,11 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_max");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 max(a, b)
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -516,11 +516,11 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_min");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 min(a, b)
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -546,11 +546,11 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_mod");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a % b
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -576,13 +576,13 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_ne_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a != b
             } else {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
-                let r = args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let r = args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution);
                 (a != b) == r
             }
         })
@@ -609,11 +609,11 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_pow");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.pow(b as u32)
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -639,11 +639,11 @@ impl IntVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int_times");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_int_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a * b
             } else {
-                args_extractor.extract_int_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }

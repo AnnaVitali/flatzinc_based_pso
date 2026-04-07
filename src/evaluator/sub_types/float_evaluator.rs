@@ -1,18 +1,19 @@
+use crate::data_utility::types::Register;
 use crate::{args_extractor::sub_types::float_args_extractor::FloatArgsExtractor, data_utility::logger::write_verbose_output};
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::Array;
+use flatzinc_serde::{Array, Literal};
 use log::info;
 use std::collections::HashMap;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 
-pub const A_TERM_INDEX: usize = 0;
-pub const B_TERM_INDEX: usize = 1;
-pub const C_TERM_INDEX: usize = 2;
-pub const R_TERM_INDEX: usize = 2;
-pub const R_TERM_LIN_EXPR_REIF_INDEX: usize = 3;
-pub const COEFF_LIN_CONSTR_INDEX: usize = 0;
-pub const VARS_LIN_CONSTR_INDEX: usize = 1;
-pub const CONST_LIN_CONSTR_INDEX: usize = 2;
+pub const A_TERM_INDEX: i64 = 0;
+pub const B_TERM_INDEX: i64 = 1;
+pub const C_TERM_INDEX: i64 = 2;
+pub const R_TERM_INDEX: i64 = 2;
+pub const R_TERM_LIN_EXPR_REIF_INDEX: i64 = 3;
+pub const COEFF_LIN_CONSTR_INDEX: i64 = 0;
+pub const VARS_LIN_CONSTR_INDEX: i64 = 1;
+pub const CONST_LIN_CONSTR_INDEX: i64 = 2;
 pub const FLOAT_EQ_TOLERANCE: f64 = 1e-4;
 
 /// Evaluator for float constraints in MiniZinc models, providing functional evaluators for various float operations.
@@ -22,6 +23,7 @@ pub const FLOAT_EQ_TOLERANCE: f64 = 1e-4;
 pub struct FloatEvaluator {
     /// Map of array identifiers to their values.
     arrays: HashMap<String, Array>,
+    variable_map: HashMap<String, Register>,
     /// Helper for extracting float arguments from constraints.
     args_extractor: FloatArgsExtractor,
     /// If true, enables verbose logging of constraint violations.
@@ -34,14 +36,16 @@ impl FloatEvaluator {
     ///
     /// # Arguments
     /// * `arrays` - Map of array identifiers to their values.
+    /// * `variable_map` - Map of variable identifiers to their registers.
     /// * `verbose` - If true, enables verbose logging of constraint violations.
     ///
     /// # Returns
     /// A new `FloatFunctionalEvaluator` instance.
-    pub fn new(arrays: HashMap<String, Array>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>, verbose: bool) -> Self {
         let args_extractor = FloatArgsExtractor::new();
         Self {
             arrays,
+            variable_map,
             args_extractor,
             verbose,
         }
@@ -58,57 +62,69 @@ impl FloatEvaluator {
     pub fn array_float_element(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let array: Vec<f64> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a constant array for array_float_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Float(f) => *f,
+                _ => panic!("Expected float literal in array for array_float_element constraint"),
+            })
+            .collect();
+        let value_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX.try_into().unwrap()).unwrap()).copied().expect("Value register not found");
         let verbose = self.verbose;
 
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
-        let c_value: Option<f64> = if c_key.is_none() {
-            Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        Box::new(move |solution: &[VariableValue]| {
+            let array_value = array[solution[index_register as usize].as_int() as usize];
+            let value = solution[value_register as usize].as_float();
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let array_value =
-                args_extractor.extract_float_element_in_array(&call, &arrays, solution);
+            let violation =  (value - array_value).abs() as f64;
 
-            let value = if let Some(const_val) = c_value {
-                const_val
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let mut violation = 0.0;
-            if (array_value - value).abs() > FLOAT_EQ_TOLERANCE {
-                if verbose {
-                    let c_display = if let Some(cv) = c_value {
-                        cv.to_string()
-                    } else {
-                        c_key.as_ref().unwrap().to_string()
-                     };
-                    info!("Violated constraint: array_float_element {} = {}", array_value, c_display);
-                }
-                violation = (array_value - value).abs();
+            if violation > 0.0 && verbose {
+                info!("Violated constraint: array_float_element {} = {}", array_value, value);
             }
+
             violation
         })
     }
+
+    pub fn array_var_float_element(
+        &self,
+        constraint: &CallWithDefines,
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let array: Vec<String> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a variable array for array_var_float_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Identifier(i) => i.clone(),
+                _ => panic!("Expected identifier in array for array_var_float_element constraint"),
+            })
+            .collect();
+        let value_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied().expect("Value register not found");
+        let verbose = self.verbose;
+        let variable_map = self.variable_map.clone();
+
+        Box::new(move |solution: &[VariableValue]| {
+            let idx_in_array = solution[index_register as usize].as_int() as usize;
+            let var_name = &array[idx_in_array];
+            let var_idx = variable_map.get(var_name).copied().expect("Array value not found") as usize;
+            let array_value = solution[var_idx].as_float();
+            let value = solution[value_register as usize].as_float();
+
+            let violation =  (value - array_value).abs() as f64;
+
+            if violation > 0.0 && verbose {
+                info!("Violated constraint: array_var_float_element {} = {}", array_value, value);
+            }
+
+            violation
+        })
+    }
+
 
     /// Returns a functional evaluator for the `float_abs` constraint.
     ///
@@ -121,74 +137,42 @@ impl FloatEvaluator {
     pub fn float_abs(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            if !float_eq_tol(a_value.abs(), b_value) {
+            if (a_value.abs() - b_value).abs() > FLOAT_EQ_TOLERANCE {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_abs {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_abs {} = {}", a_value.abs(), b_value);
                 }
                 violation = (a_value.abs() - b_value).abs();
             }
@@ -208,77 +192,45 @@ impl FloatEvaluator {
     pub fn float_acos(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+       ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.acos();
-            if !float_eq_tol(lhs, b_value) {
+            let acos = a_value.acos();
+            if !((acos - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_acos {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_acos {} = {}", a_value, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (acos - b_value).abs();
             }
             violation
         })
@@ -294,76 +246,44 @@ impl FloatEvaluator {
     pub fn float_acosh(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
             let mut violation = 0.0;
-            let lhs = a_value.acosh();
-            if !float_eq_tol(lhs, b_value) {
+            let acosh = a_value.acosh();
+            if !((acosh - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_acosh {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_acosh {} = {}", a_value, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (acosh - b_value).abs();
             }
             violation
         })
@@ -379,76 +299,45 @@ impl FloatEvaluator {
     pub fn float_asin(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.asin();
-            if !float_eq_tol(lhs, b_value) {
+            let asin = a_value.asin();
+            if !((asin - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_asin {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_asin {} = {}", a_value, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (asin - b_value).abs();
             }
             violation
         })
@@ -457,77 +346,45 @@ impl FloatEvaluator {
     pub fn float_asinh(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+       ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.asinh();
-            if !float_eq_tol(lhs, b_value) {
+            let asinh = a_value.asinh();
+            if !((asinh - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_asinh {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_asinh {} = {}", asinh, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (asinh - b_value).abs();
             }
             violation
         })
@@ -543,76 +400,45 @@ impl FloatEvaluator {
     pub fn float_atan(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+       ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.atan();
-            if !float_eq_tol(lhs, b_value) {
+            let atan = a_value.atan();
+            if !((atan - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_atan {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_atan {} = {}", atan, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (atan - b_value).abs();
             }
             violation
         })
@@ -621,94 +447,51 @@ impl FloatEvaluator {
     pub fn float_atanh(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+       ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
             if a_value.abs() >= 1.0 || b_value.abs() >= 1.0 {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Invalid input for float_atanh {} or {} outside (-1,1)", a_display, b_display);
+                    info!("Invalid input for float_atanh {} or {} outside (-1,1)", a_value, b_value);
                 }
                 violation = 1.0;
             } else {
-                let lhs = a_value.atanh();
-                if !float_eq_tol(lhs, b_value) {
+                let atanh = a_value.atanh();
+                if !((atanh - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                     if verbose {
-                        let a_display = if let Some(av) = a_const {
-                            av.to_string()
-                        } else {
-                            a_key.as_ref().unwrap().to_string()
-                        };
-                        let b_display = if let Some(bv) = b_const {
-                            bv.to_string()
-                        } else {
-                            b_key.as_ref().unwrap().to_string()
-                        };
-                        info!("Violated constraint: float_atanh {} = {}", a_display, b_display);
+                        info!("Violated constraint: float_atanh {} = {}", atanh, b_value);
                     }
-                    violation = (lhs - b_value).abs();
+                    violation = (atanh - b_value).abs();
                 }
             }
             violation
@@ -725,77 +508,45 @@ impl FloatEvaluator {
     pub fn float_cos(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+        ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() { 
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-           let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.cos();
-            if !float_eq_tol(lhs, b_value) {
+            let cos = a_value.cos();
+            if !((cos - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                     if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_cos {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_cos {} = {}", cos, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (cos - b_value).abs();
             }
             violation
         })
@@ -804,77 +555,45 @@ impl FloatEvaluator {
     pub fn float_cosh(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-           let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.cosh();
-                if !float_eq_tol(lhs, b_value) {
+            let cosh = a_value.cosh();
+                if !((cosh - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_cosh {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_cosh {} = {}", cosh, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (cosh - b_value).abs();
             }
             violation
         })
@@ -890,109 +609,67 @@ impl FloatEvaluator {
     pub fn float_div(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let c_const: Option<f64> = if c_key.is_none() {
-            Some(self.args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
 
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(cv) = c_const {
-                cv
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
             let mut violation = 0.0;
             if b_value == 0.0 {
                 violation = 1.0;
             } else {
-                let expected = a_value / b_value;
-                if !float_eq_tol(c_value, expected) {
+                let result = a_value / b_value;
+                if !((c_value - result).abs() <= FLOAT_EQ_TOLERANCE) {
                     if verbose {
-                        let a_display = if let Some(av) = a_const {
-                            av.to_string()
-                        } else {
-                            a_key.as_ref().unwrap().to_string()
-                        };
-                        let b_display = if let Some(bv) = b_const {
-                            bv.to_string()
-                        } else {
-                            b_key.as_ref().unwrap().to_string()
-                        };
-                        let c_display = if let Some(cv) = c_const {
-                            cv.to_string()
-                        } else {
-                            c_key.as_ref().unwrap().to_string()
-                        };
-
-                        info!("Violated constraint: float_div {} / {} = {}", a_display, b_display, c_display);
+                        info!("Violated constraint: float_div {}/{} = {}", a_value, b_value, c_value);
                     }
-                    violation = float_eq_violation(c_value, expected);
+                    violation = ((c_value - result).abs()) as f64;
                 }
             }
+
             violation
         })
     }
@@ -1007,78 +684,45 @@ impl FloatEvaluator {
     pub fn float_eq(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let mut violation = 0.0;
-            if !float_eq_tol(a_value, b_value) {
-                if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()  
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_eq {} = {}", a_display, b_display);
-                }
-                violation = (a_value - b_value).abs();
+                a_value = a_const.expect("Expected constant value for A_TERM");
             }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            let mut violation = 0.0;
+            if !((a_value - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
+                if verbose {
+                    info!("Violated constraint: float_eq {} = {}", a_value, b_value);
+                }
+                violation = ((a_value - b_value).abs()) as f64;
+            }
+
             violation
         })
     }
@@ -1093,103 +737,60 @@ impl FloatEvaluator {
     pub fn float_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let r_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let r_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let r_value = if let Some(rv) = r_const {
-                rv
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
             } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable, found other type variable"),
-                }
-            };
+                r_value = r_const.expect("Expected constant value for R_TERM");
+            }
 
             let mut violation = 0.0;
-            let eq_res = float_eq_tol(a_value, b_value);
+            let eq_res = a_value == b_value;
             if r_value != eq_res {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_eq_reif {} <-> {} = {}", r_display, a_display, b_display);
+                    info!("Violated constraint: float_eq_reif {} <-> {} = {}", a_value, b_value, r_value);
                 }
-                violation = (a_value - b_value).abs();
+                violation = ((a_value - b_value).abs()) as f64;
             }
             violation
         })
@@ -1205,79 +806,46 @@ impl FloatEvaluator {
     pub fn float_exp(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+        ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let b_key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(b_key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let lhs = a_value.exp();
-            if !float_eq_tol(lhs, b_value) {
+            let exp = a_value.exp();
+            if !((exp - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-
-                    info!("Violated constraint: float_exp {} = {}", a_display, b_display);
+                   
+                    info!("Violated constraint: float_exp {} = {}", exp, b_value);
                 }
-                violation = (lhs - b_value).abs();
+                violation = (exp - b_value).abs();
             }
             violation
         })
@@ -1286,74 +854,43 @@ impl FloatEvaluator {
     pub fn float_le(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+        ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let b_key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(b_key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
             let mut violation = 0.0;
             if a_value > b_value {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_le {} <= {}", a_display, b_display);
+                    info!("Violated constraint: float_le {} <= {}", a_value, b_value);
                 }
-                violation = (a_value - b_value).abs();
+                violation = ((a_value - b_value).abs()) as f64;
             }
             violation
         })
@@ -1369,89 +906,57 @@ impl FloatEvaluator {
     pub fn float_le_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let r_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let r_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let r_value = if let Some(rv) = r_const {
-                rv
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
             } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable, found other type variable"),
-                }
-            };
+                r_value = r_const.expect("Expected constant value for R_TERM");
+            }
 
             let mut violation = 0.0;
             if r_value != (a_value <= b_value) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_le_reif{} <-> {} <= {}", r_display, a_display, b_display);
+                    info!("Violated constraint: float_le_reif {} <-> {} <= {}", r_value, a_value, b_value);
                 }
                 violation = 1.0;
             }
@@ -1469,60 +974,35 @@ impl FloatEvaluator {
     pub fn float_lin_eq(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-         let literal_vars_map = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key: Option<String> = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term = Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-            
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
+
             let mut violation = 0.0;
-            if (left_side_term - term_value).abs() > FLOAT_EQ_TOLERANCE {
+            if !((left_side_term - constant_term).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_lin_eq {} = {}", verbose_terms, term_display);
+                    info!("Violated constraint: float_lin_eq {} = {}", left_side_term, constant_term);
                 }
-                violation = ((left_side_term - term_value).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
+                violation = ((left_side_term - constant_term).abs()) as f64;
             }
+
             violation
         })
     }
@@ -1537,85 +1017,45 @@ impl FloatEvaluator {
     pub fn float_lin_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-
-        let literal_vars_map = self
+        let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
+            &constraint.call,
+            &self.arrays,
+        );
+        let vars_involved = self
             .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let r_key = self.identifier_from_vars(&literal_vars_map, R_TERM_LIN_EXPR_REIF_INDEX);
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let coeff = self
-            .args_extractor
-            .extract_float_coefficients_lin_expr(COEFF_LIN_CONSTR_INDEX, &constraint.call, &arrays);
-
-        let vars_vec = self
-            .args_extractor
-            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &constraint.call, &arrays);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let mut r_register = None;
+        let mut r_const = None;
+        if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
+            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_vec, &mut verbose_terms);
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-
-            let r_value = if let Some(rv) = r_const {
-                rv
-            } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for r")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for r, found other type"),
-                }
-            };
-
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
             let mut violation = 0.0;
-            let eq_res = (left_side_term - term_value).abs() <= FLOAT_EQ_TOLERANCE;
-            if r_value != eq_res {
+            let r_value;
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
+            } else {
+                r_value = r_const.expect("Expected constant value for R_TERM in float_lin_eq_reif");
+            }
+
+            if r_value != (left_side_term == constant_term) {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_lin_eq_reif {} <-> {} = {}", r_display, verbose_terms, term_display);
+                    info!("Violated constraint: float_lin_eq_reif {} <-> {} = {}", r_value, left_side_term, constant_term);
                 }
                 violation = 1.0;
             }
@@ -1633,60 +1073,34 @@ impl FloatEvaluator {
     pub fn float_lin_le(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
-
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
             let mut violation = 0.0;
-            if left_side_term > term_value {
+            
+            if left_side_term > constant_term {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: {} <= {}", verbose_terms, term_display);
+
+                    info!("Violated constraint: float_lin_le {} <= {}", left_side_term, constant_term);
                 }
-                violation = (left_side_term - term_value).abs();
+                violation = ((left_side_term - constant_term).abs()) as f64;
             }
             violation
         })
@@ -1702,83 +1116,46 @@ impl FloatEvaluator {
     pub fn float_lin_le_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+        ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_key = self.identifier_from_vars(&literal_vars_map, R_TERM_LIN_EXPR_REIF_INDEX);
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let mut r_register = None;
+        let mut r_const = None;
+        if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
+            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
+            let r_value;
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
+            } else {
+                r_value = r_const.expect("Expected constant value for R_TERM in float_lin_eq_reif");
+            }
 
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-            let r_value = if let Some(rv) = r_const {
-                rv
-            } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for r")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for r, found other type"),
-                }
-            };
 
             let mut violation = 0.0;
-            if r_value != (left_side_term <= term_value) {
+            if r_value != (left_side_term <= constant_term) {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: lin_le_reif {} <-> {} <= {}", r_display, verbose_terms, term_display);
+                    info!("Violated constraint: float_lin_le_reif {} <-> {} <= {}", r_value, left_side_term, constant_term);
                 }
                 violation = 1.0;
             }
@@ -1796,59 +1173,34 @@ impl FloatEvaluator {
     pub fn float_lin_lt(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
             let mut violation = 0.0;
-            if left_side_term >= term_value {
+            
+            if left_side_term >= constant_term {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_lin_lt {} < {}", verbose_terms, term_display);
+
+                    info!("Violated constraint: float_lin_lt {} < {}", left_side_term, constant_term);
                 }
-                violation = (left_side_term - term_value).abs() + 1.0;
+                violation = ((left_side_term - constant_term + 1.0).abs()) as f64;
             }
             violation
         })
@@ -1864,82 +1216,46 @@ impl FloatEvaluator {
     pub fn float_lin_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_key = self.identifier_from_vars(&literal_vars_map, R_TERM_LIN_EXPR_REIF_INDEX);
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let mut r_register = None;
+        let mut r_const = None;
+        if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
+            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
-            let term_value = if let Some(tc) = term_const {
-                tc
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
+            let r_value;
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
             } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-            let r_value = if let Some(rv) = r_const {
-                rv
-            } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for r")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for r, found other type"),
-                }
-            };
+                r_value = r_const.expect("Expected constant value for R_TERM in float_lin_eq_reif");
+            }
+
 
             let mut violation = 0.0;
-            if r_value != (left_side_term < term_value) {
+            if r_value != (left_side_term < constant_term) {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_lin_lt_reif {} <-> {} < {}", r_display, verbose_terms, term_display);
+                    info!("Violated constraint: float_lin_lt_reif {} <-> {} < {}", r_value, left_side_term, constant_term);
                 }
                 violation = 1.0;
             }
@@ -1957,62 +1273,35 @@ impl FloatEvaluator {
     pub fn float_lin_ne(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
-
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
 
             let mut violation = 0.0;
-            if (left_side_term - term_value).abs() <= FLOAT_EQ_TOLERANCE {
+            if left_side_term == constant_term {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_lin_ne {} != {}", verbose_terms, term_display);
+                    info!("Violated constraint: float_lin_ne {} == {}", left_side_term, constant_term);
                 }
                 violation = 1.0;
-            }
+            } 
+
             violation
         })
     }
@@ -2027,83 +1316,46 @@ impl FloatEvaluator {
     pub fn float_lin_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let arrays = self.arrays.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
         let verbose = self.verbose;
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let term_key = self.identifier_from_vars(&literal_vars_map, CONST_LIN_CONSTR_INDEX);
-        let term_const: Option<f64> = if term_key.is_none() {
-            Some(self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_key = self.identifier_from_vars(&literal_vars_map, R_TERM_LIN_EXPR_REIF_INDEX);
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
         let coeff = self.args_extractor.extract_float_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
+            COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
             &constraint.call,
-            &arrays,
+            &self.arrays,
         );
-        let vars_involved = self.args_extractor.extract_var_values_lin_expr(
-            VARS_LIN_CONSTR_INDEX,
-            &constraint.call,
-            &arrays,
-        );
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        let vars_involved = self
+            .args_extractor
+            .extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &self.arrays);
+        let literal_vars_map = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let mut  registers = Vec::new();
+        for var in &vars_involved {
+            let reg = self.variable_map.get(var).copied().expect("Variable in linear constraint not found in variable map");
+            registers.push(reg);
+        }
+        let constant_term: f64 = self.args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
+        let mut r_register = None;
+        let mut r_const = None;
+        if literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).is_some() {
+            r_register = self.variable_map.get(literal_vars_map.get(&R_TERM_LIN_EXPR_REIF_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_LIN_EXPR_REIF_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+       Box::new(move |solution: &[VariableValue]| {
             let mut verbose_terms = String::new();
-            let left_side_term =
-                Self::float_lin_left_term(verbose, &coeff, solution, &vars_involved, &mut verbose_terms);
-            let term_value = if let Some(tc) = term_const {
-                tc
+            let left_side_term = Self::float_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
+            let r_value;
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
             } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for term, found other type"),
-                }
-            };
-            let r_value = if let Some(rv) = r_const {
-                rv
-            } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for r")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for r, found other type"),
-                }
-            };
+                r_value = r_const.expect("Expected constant value for R_TERM in float_lin_eq_reif");
+            }
+
 
             let mut violation = 0.0;
-            let lhs_ne_term = (left_side_term - term_value).abs() > FLOAT_EQ_TOLERANCE;
-            if r_value != lhs_ne_term {
+            if r_value != (left_side_term != constant_term) {
                 if verbose {
-                    let term_display = if let Some(tc) = term_const {
-                        tc.to_string()
-                    } else {
-                        term_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_lin_ne {} <-> {} != {}", r_display, verbose_terms, term_display);
+                    info!("Violated constraint: float_lin_ne_reif {} <-> {} != {}", r_value, left_side_term, constant_term);
                 }
                 violation = 1.0;
             }
@@ -2121,77 +1373,45 @@ impl FloatEvaluator {
     pub fn float_ln(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            if !float_eq_tol(a_value.ln(), b_value) {
+            let ln = a_value.ln();
+            if !((ln - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(ac) = a_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_ln {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_ln {} = {}", ln, b_value);
                 }
-                violation = (a_value - b_value).abs();
+                violation = (ln - b_value).abs();
             }
             violation
         })
@@ -2207,77 +1427,45 @@ impl FloatEvaluator {
     pub fn float_log10(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            if !float_eq_tol(a_value.log10(), b_value) {
+            let log10 = a_value.log10();
+            if !((log10 - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(ac) = a_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_log10 {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_log10 {} = {}", log10, b_value);
                 }
-                violation = (a_value - b_value).abs();
+                violation = (log10 - b_value).abs();
             }
             violation
         })
@@ -2293,77 +1481,45 @@ impl FloatEvaluator {
     pub fn float_log2(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            if !float_eq_tol(a_value.log2(), b_value) {
+            let log2 = a_value.log2();
+            if !((log2 - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(ac) = a_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_log2 {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_log2 {} = {}", log2, b_value);
                 }
-                violation = (a_value - b_value).abs();
+                violation = (log2 - b_value).abs();
             }
             violation
         })
@@ -2379,73 +1535,46 @@ impl FloatEvaluator {
     pub fn float_lt(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
             if a_value >= b_value {
                 if verbose {
-                    let a_display = if let Some(ac) = a_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-
-                    info!("Violated constraint: float lt {} < {}", a_display, b_display);
+                    info!("Violated constraint: float_lt {} < {}", a_value, b_value);
                 }
-                violation = (a_value - b_value).abs();
+                violation = (a_value - b_value + 1.0) as f64;
             }
+
             violation
         })
     }
@@ -2460,100 +1589,59 @@ impl FloatEvaluator {
     pub fn float_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let literal_vars_map = self.args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+       ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&literal_vars_map, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&literal_vars_map, B_TERM_INDEX);
-        let r_key: Option<String> = self.identifier_from_vars(&literal_vars_map, R_TERM_INDEX);
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(self.args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(self.args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(self.args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(av) = a_const {
-                av
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let r_value = if let Some(rv) = r_const {
-                rv
-            } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for R_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
+            let r_value = if r_register.is_some() {
+                solution[r_register.unwrap() as usize].as_bool()
+            } else {
+                r_const.expect("Expected constant value for R_TERM")
+            };
             if r_value != (a_value < b_value) {
                 if verbose {
-                   let a_dsiplay = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-
-                    info!("Violated constraint: float_lt_reif {} <-> {} < {}", r_display, a_dsiplay, b_display);
+                    info!("Violated constraint: int_lt_reif {} <-> {} < {}", r_value, a_value, b_value);
                 }
                 violation = 1.0;
             }
+
             violation
         })
     }
@@ -2568,92 +1656,61 @@ impl FloatEvaluator {
     pub fn float_max(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let c_const: Option<f64> = if c_key.is_none() {
-            Some(args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let c_value = if let Some(cc) = c_const {
-                cc
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for C_TERM, found other type"),
-                }
-            };
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
+            let max_val = a_value.max(b_value);
             let mut violation = 0.0;
-            let expected = a_value.max(b_value);
-            if !float_eq_tol(c_value, expected) {
+            if !((c_value - max_val).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let c_display = if let Some(cv) = c_const {
-                        cv.to_string()
-                    } else {
-                        c_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_max max({},{}) = {}", a_display, b_display, c_display);
+                    info!("Violated constraint: float_max max({},{}) = {}", a_value, b_value, c_value);
                 }
-                violation = float_eq_violation(c_value, expected);
+                violation = ((c_value - max_val).abs()) as f64;
             }
             violation
         })
@@ -2669,92 +1726,61 @@ impl FloatEvaluator {
     pub fn float_min(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let c_const: Option<f64> = if c_key.is_none() {
-            Some(args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let c_value = if let Some(cc) = c_const {
-                cc
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for C_TERM, found other type"),
-                }
-            };
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
+            let min_val = a_value.min(b_value);
             let mut violation = 0.0;
-            let expected = a_value.min(b_value);
-            if !float_eq_tol(c_value, expected) {
+            if !((c_value - min_val).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let c_display = if let Some(cv) = c_const {
-                        cv.to_string()
-                    } else {
-                        c_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_min min({}, {}) = {}", a_display, b_display, c_display);
+                    info!("Violated constraint: float_min min({},{}) = {}", a_value, b_value, c_value);
                 }
-                violation = float_eq_violation(c_value, expected);
+                violation = ((c_value - min_val).abs()) as f64;
             }
             violation
         })
@@ -2770,67 +1796,43 @@ impl FloatEvaluator {
     pub fn float_ne(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            if float_eq_tol(a_value, b_value) {
+            if a_value == b_value {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_ne {} != {}", a_display, b_display);
+                    info!("Violated constraint: float_ne {} != {}", a_value, b_value);
                 }
                 violation = 1.0;
             }
@@ -2848,91 +1850,57 @@ impl FloatEvaluator {
     pub fn float_ne_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let r_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(args_extractor.extract_bool_value(R_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else if b_register.is_none() {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let r_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for A_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for B_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let r_value = if let Some(rv) = r_const {
-                rv
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
             } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for R_TERM") {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for R_TERM, found other type"),
-                }
-            };
+                r_value = r_const.expect("Expected constant value for R_TERM");
+            }
 
             let mut violation = 0.0;
-            let eq_res = float_eq_tol(a_value, b_value);
-            let ne_res = !eq_res;
-            if r_value != ne_res {
+            if r_value != (a_value != b_value) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let r_display = if let Some(rv) = r_const {
-                        rv.to_string()
-                    } else {
-                        r_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_ne_reif {} <-> {} != {}", r_display, a_display, b_display);
+                    info!("Violated constraint: float_ne_reif {} <-> {} != {}", r_value, a_value, b_value);
                 }
                 violation = 1.0;
             }
@@ -2950,94 +1918,61 @@ impl FloatEvaluator {
     pub fn float_plus(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let c_const: Option<f64> = if c_key.is_none() {
-            Some(args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for A_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for B_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let c_value = if let Some(cc) = c_const {
-                cc
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for C_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for C_TERM, found other type"),
-                }
-            };
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
             let result = a_value + b_value;
             let mut violation = 0.0;
-            if !float_eq_tol(c_value, result) {
+            if !((c_value - result).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let c_display = if let Some(cv) = c_const {
-                        cv.to_string()
-                    } else {
-                        c_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_plus {} + {} = {}", a_display, b_display, c_display);
+                    info!("Violated constraint: float_plus {} + {} = {}", a_value, b_value, c_value);
                 }
-                violation = float_eq_violation(c_value, result);
+                violation = ((c_value - result).abs()) as f64;
             }
             violation
         })
@@ -3053,94 +1988,61 @@ impl FloatEvaluator {
     pub fn float_pow(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let c_const: Option<f64> = if c_key.is_none() {
-            Some(args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for A_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for B_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let c_value = if let Some(cc) = c_const {
-                cc
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for C_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for C_TERM, found other type"),
-                }
-            };
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
             let result = a_value.powf(b_value);
             let mut violation = 0.0;
-            if !float_eq_tol(c_value, result) {
+            if !((c_value - result).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bv) = b_const {
-                        bv.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let c_display = if let Some(cv) = c_const {
-                        cv.to_string()
-                    } else {
-                        c_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_pow {} ^ {} = {}", a_display, b_display, c_display);
+                    info!("Violated constraint: float_pow {} ^ {} = {}", a_value, b_value, c_value);
                 }
-                violation = float_eq_violation(c_value, result);
+                violation = ((c_value - result).abs()) as f64;
             }
             violation
         })
@@ -3156,73 +2058,45 @@ impl FloatEvaluator {
     pub fn float_sin(
         &self,
         constraint: &CallWithDefines,
-         solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_value_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_value_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let expected = a_value.sin();
-            if !float_eq_tol(b_value, expected) {
+            let sin = a_value.sin();
+                if !((sin - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_value_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-
-                    info!("Violated constraint: float_sin {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_sin {} = {}", sin, b_value);
                 }
-                violation = float_eq_violation(b_value, expected);
+                violation = (sin - b_value).abs();
             }
             violation
         })
@@ -3238,72 +2112,45 @@ impl FloatEvaluator {
     pub fn float_sinh(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-          let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_value_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-           let a_value = if let Some(ac) = a_value_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let expected = a_value.sinh();
-            if !float_eq_tol(b_value, expected) {
+            let sinh = a_value.sinh();
+                if !((sinh - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_value_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string() 
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_sinh {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_sinh {} = {}", sinh, b_value);
                 }
-                violation = float_eq_violation(b_value, expected);
+                violation = (sinh - b_value).abs();
             }
             violation
         })
@@ -3319,73 +2166,45 @@ impl FloatEvaluator {
     pub fn float_sqrt(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+        ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-         let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_value_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_value_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let expected = a_value.sqrt();
-            if !float_eq_tol(b_value, expected) {
+            let sqrt = a_value.sqrt();
+                if !((sqrt - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(av) = a_value_const {
-                        av.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    
-                    info!("Violated constraint: float_sqrt {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_sqrt {} = {}", sqrt, b_value);
                 }
-                violation = float_eq_violation(b_value, expected);
+                violation = (sqrt - b_value).abs();
             }
             violation
         })
@@ -3401,72 +2220,45 @@ impl FloatEvaluator {
     pub fn float_tan(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_value_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-           let a_value = if let Some(ac) = a_value_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let expected = a_value.tan();
-            if !float_eq_tol(b_value, expected) {
+            let tan = a_value.tan();
+                if !((tan - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(ac) = a_value_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_tan {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_tan {} = {}", tan, b_value);
                 }
-                violation = float_eq_violation(b_value, expected);
+                violation = (tan - b_value).abs();
             }
             violation
         })
@@ -3482,72 +2274,45 @@ impl FloatEvaluator {
     pub fn float_tanh(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self
-            .identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_value_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_value_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            let expected = a_value.tanh();
-            if !float_eq_tol(b_value, expected) {
+            let tanh = a_value.tanh();
+                if !((tanh - b_value).abs() <= FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(ac) = a_value_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_tanh {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_tanh {} = {}", tanh, b_value);
                 }
-                violation = float_eq_violation(b_value, expected);
+                violation = (tanh - b_value).abs();
             }
             violation
         })
@@ -3563,94 +2328,61 @@ impl FloatEvaluator {
     pub fn float_times(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_value_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_float_value(A_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let c_const: Option<f64> = if c_key.is_none() {
-            Some(args_extractor.extract_float_value(C_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
 
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_value_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for A_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for A_TERM, found other type"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for B_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type"),
-                }
-            };
-
-            let c_value = if let Some(cc) = c_const {
-                cc
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for C_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for C_TERM, found other type"),
-                }
-            };
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
             let result = a_value * b_value;
             let mut violation = 0.0;
-            if !float_eq_tol(c_value, result) {
+            if c_value != result {
                 if verbose {
-                    let a_display = if let Some(ac) = a_value_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    let c_display = if let Some(cc) = c_const {
-                        cc.to_string()
-                    } else {
-                        c_key.as_ref().unwrap().to_string()
-                    };
-
-                    info!("Violated constraint: float_times {} * {} = {}", a_display, b_display, c_display);
+                    info!("Violated constraint: float_times {} * {} = {}", a_value, b_value, c_value);
                 }
-                violation = float_eq_violation(c_value, result);
+                violation = ((c_value - result).abs()) as f64;
             }
             violation
         })
@@ -3666,69 +2398,44 @@ impl FloatEvaluator {
     pub fn int2float(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
+         ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+               let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = args_extractor.extract_literal_identifier_with_index(&constraint.call.args);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else {
+           a_const = Some(self.args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else {
+            b_const = Some(self.args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-
-        let a_const: Option<f64> = if a_key.is_none() {
-            Some(args_extractor.extract_int_value(A_TERM_INDEX, &constraint.call, solution) as f64)
-        } else {
-            None
-        };
-        let b_const: Option<f64> = if b_key.is_none() {
-            Some(args_extractor.extract_float_value(B_TERM_INDEX, &constraint.call, solution))
-        } else {
-            None
-        };
-        let float_eq_tol = |x: f64, y: f64| (x - y).abs() <= FLOAT_EQ_TOLERANCE;
-        let float_eq_violation = |x: f64, y: f64| ((x - y).abs() - FLOAT_EQ_TOLERANCE).max(0.0);
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let a_value = if let Some(ac) = a_const {
-                ac
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_int();
             } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for A_TERM") {
-                    VariableValue::Int(i) => *i as f64,
-                    _ => panic!("Expected int variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_float();
             } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution.get(key_ref).expect("Expected variable in solution for B_TERM") {
-                    VariableValue::Float(f) => *f,
-                    _ => panic!("Expected float variable for B_TERM, found other type variable"),
-                }
-            };
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
 
             let mut violation = 0.0;
-            if !float_eq_tol(a_value, b_value) {
+            if !((a_value as f64 - b_value).abs() < FLOAT_EQ_TOLERANCE) {
                 if verbose {
-                    let a_display = if let Some(ac) = a_const {
-                        ac.to_string()
-                    } else {
-                        a_key.as_ref().unwrap().to_string()
-                    };
-                    let b_display = if let Some(bc) = b_const {
-                        bc.to_string()
-                    } else {
-                        b_key.as_ref().unwrap().to_string()
-                    };
-                    info!("Violated constraint: float_eq {} = {}", a_display, b_display);
+                    info!("Violated constraint: float_eq {} = {}", a_value, b_value);
                 }
-                violation = float_eq_violation(a_value, b_value);
+                violation = (a_value as f64 - b_value).abs();
             }
             violation
         })
@@ -3737,27 +2444,18 @@ impl FloatEvaluator {
     fn float_lin_left_term(
         verbose: bool,
         coeff: &Vec<f64>,
-        solution: &HashMap<String, VariableValue>,
-        vars_involved: &Vec<String>,
+        registers: &Vec<u32>,
+        solution: &[VariableValue],
         verbose_terms: &mut String,
     ) -> f64 {
         let left_side_term: f64 = coeff
             .iter()
-            .zip(vars_involved.iter())
+            .zip(registers.iter())
             .map(|(c, id)| {
-                let var_val = solution
-                    .get(id)
-                    .and_then(|int_val| match int_val {
-                        VariableValue::Float(int_val) => Some(*int_val),
-                        _ => None,
-                    })
-                    .unwrap_or_else(|| panic!("No value defined for the variable {}", id));
-
                 if verbose {
-                    write_verbose_output(verbose_terms, c, &var_val);
+                    write_verbose_output(verbose_terms, c, &solution[*id as usize].as_float());
                 }
-
-                c * var_val
+                c * solution[*id as usize].as_float()
             })
             .sum();
         left_side_term

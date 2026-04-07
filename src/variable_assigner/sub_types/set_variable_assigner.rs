@@ -53,7 +53,7 @@ impl SetVariableAssigner {
         let arrays = self.arrays.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            args_extractor.extract_set_array_element(ARRAY_INDEX, &call, &arrays, solution)
+            args_extractor.extract_set_array_element(ARRAY_INDEX.try_into().unwrap(), &call, &arrays, solution)
         })
     }
 
@@ -72,8 +72,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.difference(&y).copied().collect()
         })
     }
@@ -93,7 +93,7 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.clone()
         })
     }
@@ -113,8 +113,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x == y
         })
     }
@@ -134,8 +134,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_int_value(X_TERM_INDEX, &call, solution);
-            let s = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_int_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let s = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             s.contains(&x)
         })
     }
@@ -155,8 +155,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.intersection(&y).copied().collect()
         })
     }
@@ -176,8 +176,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             let mut xv: Vec<i64> = x.iter().cloned().collect();
             let mut yv: Vec<i64> = y.iter().cloned().collect();
             xv.sort();
@@ -201,8 +201,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             let mut xv: Vec<i64> = x.iter().cloned().collect();
             let mut yv: Vec<i64> = y.iter().cloned().collect();
             xv.sort();
@@ -226,8 +226,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x != y
         })
     }
@@ -247,8 +247,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.is_subset(&y)
         })
     }
@@ -268,8 +268,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.is_superset(&y)
         })
     }
@@ -289,8 +289,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.symmetric_difference(&y).copied().collect()
         })
     }
@@ -310,8 +310,8 @@ impl SetVariableAssigner {
         let args_extractor = self.args_extractor.clone();
         let call = constraint.call.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let x = args_extractor.extract_set_value(X_TERM_INDEX, &call, solution);
-            let y = args_extractor.extract_set_value(Y_TERM_INDEX, &call, solution);
+            let x = args_extractor.extract_set_value(X_TERM_INDEX.try_into().unwrap(), &call, solution);
+            let y = args_extractor.extract_set_value(Y_TERM_INDEX.try_into().unwrap(), &call, solution);
             x.union(&y).copied().collect()
         })
     }

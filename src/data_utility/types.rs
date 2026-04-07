@@ -1,0 +1,1 @@
+pub(crate) type Register = u32;

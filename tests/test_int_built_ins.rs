@@ -38,8 +38,8 @@ pub(crate) fn test_array_int_element() -> Result<(), Box<dyn Error>> {
     let fzn = load(&path)?;
 
     let b: i64 = 1;
-    let mut c: i64 = 10;
-    let array_value: i64 = 10;
+    let mut c: i64 = 20;
+    let array_value: i64 = 20;
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     solution_provider.provide_int("b".to_string(), b);
@@ -84,7 +84,7 @@ pub(crate) fn test_array_var_int_element() -> Result<(), Box<dyn Error>> {
     let fzn = load(&path)?;
 
     let b: i64 = 1;
-    let mut c: i64 = 1;
+    let mut c: i64 = 2;
     let as_array = vec![1_i64, 2, 3];
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
@@ -102,7 +102,7 @@ pub(crate) fn test_array_var_int_element() -> Result<(), Box<dyn Error>> {
 
     let mut invariant_evaluator = MiniEvaluator::new(&*path, fzn, Some("verbose"));
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
-    assert_eq!(violation, ((as_array[b as usize - 1] - c) as f64).abs());
+    assert_eq!(violation, ((as_array[b as usize] - c) as f64).abs());
 
     Ok(())
 }

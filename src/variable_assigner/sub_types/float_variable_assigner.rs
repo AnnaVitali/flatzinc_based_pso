@@ -62,7 +62,7 @@ impl FloatVariableAssigner {
             if vars_identifier.contains(&defined_var) {
                 args_extractor.extract_float_element_in_array(&call, &arrays, solution)
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -87,10 +87,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_abs");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.abs()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -115,11 +115,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_div");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a / b
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -144,9 +144,9 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_eq");
             if vars_identifier.contains(&defined_var) {
-                args_extractor.extract_float_value(A_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution)
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -171,11 +171,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_max");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.max(b)
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -200,11 +200,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_min");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.min(b)
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -229,11 +229,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_plus");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a + b
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -258,11 +258,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_pow");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.powf(b)
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -288,11 +288,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_times");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a * b
             } else {
-                args_extractor.extract_float_value(C_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(C_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -318,10 +318,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_acos");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.acos()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -346,10 +346,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_acosh");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.acosh()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -376,10 +376,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_asin");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.asin()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -406,10 +406,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_asinh");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.asinh()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -436,10 +436,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_atan");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.atan()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -466,10 +466,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_atanh");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.atanh()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -496,10 +496,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_cos");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.cos()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -526,10 +526,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_cosh");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.cosh()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -556,11 +556,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_eq_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a == b
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -587,10 +587,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_exp");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.exp()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -617,11 +617,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_le_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a <= b
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -647,13 +647,13 @@ impl FloatVariableAssigner {
         let variable = variable.clone();
         Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut coeff = args_extractor.extract_float_coefficients_lin_expr(
-                COEFF_LIN_CONSTR_INDEX,
+                COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                 &call,
                 &arrays,
             );
-            let term = args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+            let term = args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
             let mut vars_involved =
-                args_extractor.extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX, &call, &arrays);
+                args_extractor.extract_var_values_lin_expr(VARS_LIN_CONSTR_INDEX.try_into().unwrap(), &call, &arrays);
             let var_idx = vars_involved.iter().position(|id| id == &variable);
             if var_idx.is_none() {
                 let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
@@ -693,21 +693,21 @@ impl FloatVariableAssigner {
                 .expect("Expected a defined variable for float_lin_eq_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
                 left_side_term == term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -736,21 +736,21 @@ impl FloatVariableAssigner {
                 .expect("Expected a defined variable for float_lin_le_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
                 left_side_term <= term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -779,21 +779,21 @@ impl FloatVariableAssigner {
                 .expect("Expected a defined variable for float_lin_lt_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
                 left_side_term < term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -822,21 +822,21 @@ impl FloatVariableAssigner {
                 .expect("Expected a defined variable for float_lin_ne_reif");
             if vars_identifier.contains(&defined_var) {
                 let coeff = args_extractor.extract_float_coefficients_lin_expr(
-                    COEFF_LIN_CONSTR_INDEX,
+                    COEFF_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let vars_involved = args_extractor.extract_var_values_lin_expr(
-                    VARS_LIN_CONSTR_INDEX,
+                    VARS_LIN_CONSTR_INDEX.try_into().unwrap(),
                     &call,
                     &arrays,
                 );
                 let term =
-                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX, &call, solution);
+                    args_extractor.extract_float_value(CONST_LIN_CONSTR_INDEX.try_into().unwrap(), &call, solution);
                 let left_side_term = float_lin_left_term(coeff, vars_involved, solution);
                 left_side_term != term
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -863,10 +863,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_ln");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.ln()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -893,10 +893,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_log10");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.log10()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -923,10 +923,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_log2");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.log2()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -953,11 +953,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_lt_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a < b
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -984,11 +984,11 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_ne_reif");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
-                let b = args_extractor.extract_float_value(B_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
+                let b = args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a != b
             } else {
-                args_extractor.extract_bool_value(R_TERM_INDEX, &call, solution)
+                args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -1015,10 +1015,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_sin");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.sin()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -1045,10 +1045,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_sinh");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.sinh()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -1075,10 +1075,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_sqrt");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.sqrt()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -1105,10 +1105,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_tan");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.tan()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -1135,10 +1135,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for float_tanh");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_float_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_float_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a.tanh()
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }
@@ -1165,10 +1165,10 @@ impl FloatVariableAssigner {
                 .as_ref()
                 .expect("Expected a defined variable for int2float");
             if vars_identifier.contains(&defined_var) {
-                let a = args_extractor.extract_int_value(A_TERM_INDEX, &call, solution);
+                let a = args_extractor.extract_int_value(A_TERM_INDEX.try_into().unwrap(), &call, solution);
                 a as f64
             } else {
-                args_extractor.extract_float_value(B_TERM_INDEX, &call, solution)
+                args_extractor.extract_float_value(B_TERM_INDEX.try_into().unwrap(), &call, solution)
             }
         })
     }

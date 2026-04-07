@@ -41,8 +41,8 @@ pub(crate) fn test_array_float_element() -> Result<(), Box<dyn Error>> {
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let b = 1;
-    let mut c = 1.0;
-    let array_value = 1.0;
+    let mut c = 2.0;
+    let array_value = 2.0;
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_float("c".to_string(), c);
 
@@ -87,7 +87,7 @@ pub(crate) fn test_array_var_float_element() -> Result<(), Box<dyn Error>> {
 
     let mut solution_provider = SolutionProvider::new(fzn.clone(), &path_ozn);
     let b = 1;
-    let mut c = 1.0;
+    let mut c = 2.0;
     let as_array = vec![1.0, 2.0, 3.0];
     solution_provider.provide_int("b".to_string(), b);
     solution_provider.provide_float("c".to_string(), c);
@@ -103,7 +103,7 @@ pub(crate) fn test_array_var_float_element() -> Result<(), Box<dyn Error>> {
     solution_provider.provide_array_of_float("as".to_string(), as_array.clone());
 
     let (_, violation) = invariant_evaluator.evaluate_invariants_graph(&solution_provider);
-    assert_eq!(violation, (as_array[b as usize - 1] - c).abs());
+    assert_eq!(violation, (as_array[b as usize] - c).abs());
 
     Ok(())
 }

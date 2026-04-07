@@ -1,17 +1,18 @@
-use crate::args_extractor::sub_types::bool_args_extractor::BoolArgsExtractor;
+use crate::args_extractor::{self, sub_types::bool_args_extractor::BoolArgsExtractor};
 use crate::data_utility::logger::write_verbose_output;
+use crate::data_utility::types::Register;
 use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::solution_provider::VariableValue;
-use flatzinc_serde::Array;
+use flatzinc_serde::{Array, Literal};
 use log::info;
 use std::collections::HashMap;
 
-pub const A_TERM_INDEX: usize = 0;
-pub const B_TERM_INDEX: usize = 1;
-pub const C_TERM_INDEX: usize = 2;
-pub const AS_ARRAY_INDEX: usize = 0;
-pub const BS_ARRAY_INDEX: usize = 1;
-pub const R_TERM_INDEX: usize = 1;
+pub const A_TERM_INDEX: i64 = 0;
+pub const B_TERM_INDEX: i64 = 1;
+pub const C_TERM_INDEX: i64 = 2;
+pub const AS_ARRAY_INDEX: i64 = 0;
+pub const BS_ARRAY_INDEX: i64 = 1;
+pub const R_TERM_INDEX: i64 = 1;
 pub const COEFF_LIN_CONSTR_INDEX: usize = 0;
 
 /// Evaluator for boolean constraints in MiniZinc models, providing functional evaluators for various boolean operations.
@@ -21,6 +22,8 @@ pub const COEFF_LIN_CONSTR_INDEX: usize = 0;
 pub struct BoolEvaluator {
     /// Map of array identifiers to their values.
     arrays: HashMap<String, Array>,
+    /// Map of variable identifiers to their register values.
+    variable_map: HashMap<String, Register>,
     /// Helper for extracting boolean arguments from constraints.
     args_extractor: BoolArgsExtractor,
     /// If true, enables verbose logging of constraint violations.
@@ -32,14 +35,16 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `arrays` - Map of array identifiers to their values.
+    /// * `variable_map` - Map of variable identifiers to their register values.
     /// * `verbose` - If true, enables verbose logging of constraint violations.
     ///
     /// # Returns
     /// A new `BoolFunctionalEvaluator` instance.
-    pub fn new(arrays: HashMap<String, Array>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>, verbose: bool) -> Self {
         let args_extractor = BoolArgsExtractor::new();
         Self {
             arrays,
+            variable_map,
             args_extractor,
             verbose,
         }
@@ -56,55 +61,47 @@ impl BoolEvaluator {
     pub fn array_bool_and(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let array: Vec<String> = self.args_extractor.extract_bool_array(AS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut vars_register = Vec::with_capacity(array.len());
+        for var_name in &array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            vars_register.push(var_register);
+        }
+
+        let mut r_register = None;
+        let mut r_const = None;
+        if vars_involved.get(&R_TERM_INDEX).is_some() {
+            r_register = self.variable_map.get(vars_involved.get(&R_TERM_INDEX).unwrap()).copied();
+        }else {
+            r_const = Some(self.args_extractor.extract_bool_value(R_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&call.args);
 
-        let r_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
-        let r_const: Option<bool> = if r_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(R_TERM_INDEX, &call, solution),
-            )
-        } else {
-            None
-        };
-
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let mut violation = 0.0;
-
-            let as_array =
-                args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
-            let r_value = if let Some(rv) = r_const {
-                rv
+        Box::new(move |solution: &[VariableValue]| {
+            let r_value;
+            let mut array_values = Vec::with_capacity(vars_register.len());
+            for (_, var_register) in vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                array_values.push(value);
+            }
+            
+            if r_register.is_some() {
+                r_value = solution[r_register.unwrap() as usize].as_bool();
             } else {
-                let key_ref = r_key
-                    .as_ref()
-                    .expect("Expected variable key for R_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for R_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for R_TERM, found other type variable"),
-                }
-            };
+                r_value = r_const.expect("Expected constant value for R_TERM");
+            }
 
-            if as_array.iter().all(|&item| item) != r_value {
+            let mut violation = 0.0;
+            if array_values.iter().all(|&item| item) != r_value {
                 if verbose {
-                    let joined = as_array
+                    let joined = array_values
                         .iter()
                         .map(|b| if *b { "true" } else { "false" })
                         .collect::<Vec<_>>()
                         .join(" /\\ ");
-                    let r_name = r_key.as_deref().unwrap_or("<const>");
-                    info!("Violated: {} <-> {}", joined, r_name);
+                    info!("Violated: array_bool_and {} <-> {}", joined, r_value);
                 }
                 violation = 1.0;
             }
@@ -124,62 +121,63 @@ impl BoolEvaluator {
     pub fn array_bool_element(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
-        let vars_involved = args_extractor.extract_literal_identifiers_with_index(&call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX.try_into().unwrap()).unwrap()).copied().expect("Index register not found");
+        let array: Vec<bool> = self.arrays.get(vars_involved.get(&B_TERM_INDEX.try_into().unwrap()).unwrap()).expect("Expect a constant array for array_bool_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Bool(b) => *b,
+                _ => panic!("Expected bool literal in array for array_bool_element constraint"),
+            })
+            .collect();
+        let value_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied().expect("Value register not found");
         let verbose = self.verbose;
 
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
-        let c_value: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        Box::new(move |solution: &[VariableValue]| {
+            let array_value = array[solution[index_register as usize].as_int() as usize];
+            let value = solution[value_register as usize].as_bool();
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
-            let mut violation = 0.0;
+            let violation =  (value as i32 - array_value as i32).abs() as f64;
 
-            let array_value =
-                args_extractor.extract_bool_element_array(AS_ARRAY_INDEX, &call, &arrays, solution);
-            let c_value = if let Some(cv) = c_value {
-                cv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable, found other type variable"),
-                }
-            };
+            if violation > 0.0 && verbose {
+                info!("Violated constraint: array_bool_element {} = {}", array_value, value);
+            }
 
-            if array_value != c_value {
-                if verbose {
-                    let array_display = if array_value {
-                        "true".to_string()
-                    } else {
-                        "false".to_string()
-                    };
-                    let value_display = if c_key.is_none() {
-                        c_value.to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    info!(
-                        "Violated constraint: array_bool_element {} = {}",
-                        array_display, value_display
-                    );
-                }
-                violation = 1.0;
+            violation
+        })
+    }
+
+    pub fn array_var_bool_element(
+        &self,
+        constraint: &CallWithDefines,
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
+        let index_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied().expect("Index register not found");
+        let array: Vec<String> = self.arrays.get(vars_involved.get(&B_TERM_INDEX).unwrap()).expect("Expect a variable array for array_var_bool_element constraint")
+            .contents
+            .iter()
+            .map(|elem| match elem {
+                Literal::Identifier(i) => i.clone(),
+                _ => panic!("Expected identifier in array for array_var_bool_element constraint"),
+            })
+            .collect();
+        let value_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied().expect("Value register not found");
+        let verbose = self.verbose;
+        let variable_map = self.variable_map.clone();
+
+        Box::new(move |solution: &[VariableValue]| {
+            let idx_in_array = solution[index_register as usize].as_int() as usize;
+            let var_name = &array[idx_in_array];
+            let var_idx = variable_map.get(var_name).copied().expect("Array value not found") as usize;
+            let array_value = solution[var_idx].as_bool();
+            let value = solution[value_register as usize].as_bool();
+
+            let violation =  (value as i32 - array_value as i32).abs() as f64;
+
+            if violation > 0.0 && verbose {
+                info!("Violated constraint: array_var_bool_element {} = {}", array_value, value);
             }
 
             violation
@@ -196,21 +194,26 @@ impl BoolEvaluator {
     pub fn array_bool_xor(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+    )-> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let array: Vec<String> = self.args_extractor.extract_bool_array(AS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut vars_register = Vec::with_capacity(array.len());
+        for var_name in &array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            vars_register.push(var_register);
+        }
         let verbose = self.verbose;
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let mut array_values = Vec::with_capacity(vars_register.len());
+            for (_, var_register) in vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                array_values.push(value);
+            }
+
             let mut violation = 0.0;
-
-            let array_value =
-                args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
-
-            if !array_value.iter().fold(false, |acc, &item| acc ^ item) {
+            if !array_values.iter().fold(false, |acc, &item| acc ^ item) {
                 if verbose {
-                    let joined = array_value
+                    let joined = array_values
                         .iter()
                         .map(|b| if *b { "true" } else { "false" })
                         .collect::<Vec<_>>()
@@ -219,6 +222,7 @@ impl BoolEvaluator {
                 }
                 violation = 1.0;
             }
+
 
             violation
         })
@@ -235,109 +239,60 @@ impl BoolEvaluator {
     pub fn bool_and(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let c_const: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_bool();
+            } else {
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for A_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for B_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(cv) = c_const {
-                cv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for C_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for C_TERM, found other type variable"),
-                }
-            };
-
-            if c_value != (a_value && b_value) {
+           if c_value != (a_value && b_value) {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let c_display = if c_key.is_none() {
-                        c_const.unwrap().to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: array_bool_and {} <-> {} /\\ {}",
-                        c_display, a_display, b_display
+                        c_value, a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -357,39 +312,54 @@ impl BoolEvaluator {
     pub fn bool_clause(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let as_array: Vec<String> = self.args_extractor.extract_bool_array(AS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut as_vars_register = Vec::with_capacity(as_array.len());
+        for var_name in &as_array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            as_vars_register.push(var_register);
+        }
+
+        let bs_array: Vec<String> = self.args_extractor.extract_bool_array(BS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut bs_vars_register = Vec::with_capacity(bs_array.len());
+        for var_name in &bs_array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            bs_vars_register.push(var_register);
+        }
         let verbose = self.verbose;
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut violation = 0.0;
 
-            let as_array =
-                args_extractor.extract_bool_array(AS_ARRAY_INDEX, &arrays, &call, solution);
-            let bs_array =
-                args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
+            let mut as_values = Vec::with_capacity(as_vars_register.len());
+            for (_, var_register) in as_vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                as_values.push(value);
+            }
+            let mut bs_values = Vec::with_capacity(bs_vars_register.len());
+            for (_, var_register) in bs_vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                bs_values.push(value);
+            }
 
-            let or_as_array = as_array.iter().map(|&b| b as i64).sum::<i64>();
-            let or_bs_array = bs_array.iter().map(|&b| b as i64).sum::<i64>();
+            let or_as_array = as_values.iter().map(|&b| b as i64).sum::<i64>();
+            let or_bs_array = bs_values.iter().map(|&b| b as i64).sum::<i64>();
 
             let result = or_as_array + or_bs_array;
 
             if result == 0 {
                 if verbose {
                     let mut interleaved: Vec<&str> = Vec::new();
-                    let max_len = std::cmp::max(as_array.len(), bs_array.len());
+                    let max_len = std::cmp::max(as_values.len(), bs_values.len());
                     for i in 0..max_len {
-                        if let Some(a) = as_array.get(i) {
+                        if let Some(a) = as_values.get(i) {
                             interleaved.push(if *a { "true" } else { "false" });
                         }
-                        if let Some(b) = bs_array.get(i) {
+                        if let Some(b) = bs_values.get(i) {
                             interleaved.push(if *b { "not(true)" } else { "not(false)" });
                         }
                     }
                     let joined = interleaved.join(r" \/ ");
-                    info!("constraint{:?}", call);
                     info!("Violated constraint: bool_clause {}", joined);
                 }
                 violation = 1.0;
@@ -410,77 +380,43 @@ impl BoolEvaluator {
     pub fn bool_eq(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(i) => *i,
-                    _ => panic!("Expected bool variable, found other type variable"),
-                }
-            };
-
             if a_value != b_value {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    info!("Violated constraint: bool_eq {} = {}", a_display, b_display);
+                    info!("Violated constraint: bool_eq {} = {}", a_value, b_value);
                 }
                 violation = 1.0;
             }
@@ -499,108 +435,60 @@ impl BoolEvaluator {
     pub fn bool_eq_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let c_const: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_bool();
+            } else {
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for A_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for B_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(rv) = c_const {
-                rv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for C_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for C_TERM, found other type variable"),
-                }
-            };
             if c_value != (a_value == b_value) {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let c_display = if c_key.is_none() {
-                        c_const.unwrap().to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_eq_reif {} <-> {} = {}",
-                        c_display, a_display, b_display
+                        c_value, a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -620,79 +508,45 @@ impl BoolEvaluator {
     pub fn bool_le(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
             if a_value > b_value {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_le {} <= {}",
-                        a_display, b_display
+                        a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -712,109 +566,60 @@ impl BoolEvaluator {
     pub fn bool_le_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+   ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, R_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let c_const: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(R_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_bool();
+            } else {
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for A_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for B_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(rv) = c_const {
-                rv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for C_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for C_TERM, found other type variable"),
-                }
-            };
-
             if c_value != (a_value <= b_value) {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let c_display = if c_key.is_none() {
-                        c_const.unwrap().to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_le_reif {} <-> {} <= {}",
-                        c_display, a_display, b_display
+                        c_value, a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -833,72 +638,52 @@ impl BoolEvaluator {
     pub fn bool_lin_eq(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let as_array: Vec<String> = self.args_extractor.extract_bool_array(AS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut as_vars_register = Vec::with_capacity(as_array.len());
+        for var_name in &as_array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            as_vars_register.push(var_register);
+        }
+
+        let bs_array: Vec<String> = self.args_extractor.extract_bool_array(BS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut bs_vars_register = Vec::with_capacity(bs_array.len());
+        for var_name in &bs_array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            bs_vars_register.push(var_register);
+        }
         let verbose = self.verbose;
-        let coeff = self.args_extractor.extract_int_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
-            &call,
-            &self.arrays,
-        );
-        let literal_vars_map = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&call.args);
-        let term_key: Option<String> = self.identifier_from_vars(&literal_vars_map, C_TERM_INDEX);
-        let term_const: Option<i64> = if term_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_int_constant_term_lin_expr(&call),
-            )
-        } else {
-            None
-        };
+        let constant_term: i64 = self.args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut violation = 0.0;
-            let bs_array =
-                args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Int(i) => *i,
-                    _ => panic!("Expected int variable for term, found other type"),
-                }
-            };
 
-            let mut verbose_terms = String::new();
+            let mut as_values = Vec::with_capacity(as_vars_register.len());
+            for (_, var_register) in as_vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                as_values.push(value);
+            }
+            let mut bs_values = Vec::with_capacity(bs_vars_register.len());
+            for (_, var_register) in bs_vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                bs_values.push(value);
+            }
 
-            let left_side_term: i64 = coeff
+            let left_side_term: i64 = as_values
                 .iter()
-                .zip(bs_array.iter())
-                .map(|(c, b)| {
-                    let val = if *b { 1_i64 } else { 0_i64 };
-                    if verbose {
-                        write_verbose_output(&mut verbose_terms, c, &val);
-                    }
-                    c * val
+                .zip(bs_values.iter())
+                .map(|(a, b)| {
+                    let a_val = if *a { 1_i64 } else { 0_i64 };
+                    let b_val = if *b { 1_i64 } else { 0_i64 };
+                    a_val * b_val
                 })
                 .sum();
 
-            if left_side_term != term_value {
+            if left_side_term != constant_term {
                 if verbose {
-                    let term_display = if term_key.is_none() {
-                        term_const.unwrap().to_string()
-                    } else {
-                        term_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_lin_eq {} = {}",
-                        left_side_term, term_display
+                        left_side_term, constant_term
                     );
                 }
                 violation = 1.0;
@@ -917,72 +702,52 @@ impl BoolEvaluator {
     pub fn bool_lin_le(
         &self,
         constraint: &CallWithDefines,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
-        let args_extractor = self.args_extractor.clone();
-        let arrays = self.arrays.clone();
-        let call = constraint.call.clone();
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+        let as_array: Vec<String> = self.args_extractor.extract_bool_array(AS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut as_vars_register = Vec::with_capacity(as_array.len());
+        for var_name in &as_array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            as_vars_register.push(var_register);
+        }
+
+        let bs_array: Vec<String> = self.args_extractor.extract_bool_array(BS_ARRAY_INDEX as usize, &constraint.call.args, &self.arrays);
+        let mut bs_vars_register = Vec::with_capacity(bs_array.len());
+        for var_name in &bs_array {
+            let var_register = self.variable_map.get(var_name).copied().expect("Array value not found in variable map");
+            bs_vars_register.push(var_register);
+        }
         let verbose = self.verbose;
-        let coeff = self.args_extractor.extract_int_coefficients_lin_expr(
-            COEFF_LIN_CONSTR_INDEX,
-            &call,
-            &self.arrays,
-        );
-        let literal_vars_map = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&call.args);
-        let term_key: Option<String> = self.identifier_from_vars(&literal_vars_map, C_TERM_INDEX);
-        let term_const: Option<i64> = if term_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_int_constant_term_lin_expr(&call),
-            )
-        } else {
-            None
-        };
+        let constant_term: i64 = self.args_extractor.extract_int_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new());
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
             let mut violation = 0.0;
-            let bs_array =
-                args_extractor.extract_bool_array(BS_ARRAY_INDEX, &arrays, &call, solution);
-            let term_value = if let Some(tc) = term_const {
-                tc
-            } else {
-                let key_ref = term_key
-                    .as_ref()
-                    .expect("Expected variable key for CONST_LIN_CONSTR_INDEX when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for term")
-                {
-                    VariableValue::Int(i) => *i,
-                    _ => panic!("Expected int variable for term, found other type"),
-                }
-            };
 
-            let mut verbose_terms = String::new();
+            let mut as_values = Vec::with_capacity(as_vars_register.len());
+            for (_, var_register) in as_vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                as_values.push(value);
+            }
+            let mut bs_values = Vec::with_capacity(bs_vars_register.len());
+            for (_, var_register) in bs_vars_register.iter().enumerate() {
+                let value = solution[*var_register as usize].as_bool();
+                bs_values.push(value);
+            }
 
-            let left_side_term: i64 = coeff
+            let left_side_term: i64 = as_values
                 .iter()
-                .zip(bs_array.iter())
-                .map(|(c, b)| {
-                    let val = if *b { 1_i64 } else { 0_i64 };
-                    if verbose {
-                        write_verbose_output(&mut verbose_terms, c, &val);
-                    }
-                    c * val
+                .zip(bs_values.iter())
+                .map(|(a, b)| {
+                    let a_val = if *a { 1_i64 } else { 0_i64 };
+                    let b_val = if *b { 1_i64 } else { 0_i64 };
+                    a_val * b_val
                 })
                 .sum();
 
-            if left_side_term > term_value {
+            if left_side_term > constant_term {
                 if verbose {
-                    let term_display = if term_key.is_none() {
-                        term_const.unwrap().to_string()
-                    } else {
-                        term_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_lin_le {} <= {}",
-                        verbose_terms, term_display
+                        left_side_term, constant_term
                     );
                 }
                 violation = 1.0;
@@ -1002,77 +767,43 @@ impl BoolEvaluator {
     pub fn bool_lt(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
             if a_value >= b_value {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    info!("Violated constraint: bool_lt {} < {}", a_display, b_display);
+                    info!("Violated constraint: bool_lt {} < {}", a_value, b_value);
                 }
                 violation = 1.0;
             }
@@ -1091,109 +822,60 @@ impl BoolEvaluator {
     pub fn bool_lt_reif(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let c_const: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_bool();
+            } else {
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for A_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for B_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(rv) = c_const {
-                rv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for C_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for C_TERM, found other type variable"),
-                }
-            };
-
             if c_value != (a_value < b_value) {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let c_display = if c_key.is_none() {
-                        c_const.unwrap().to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_lt_reif {} <-> {} < {}",
-                        c_display, a_display, b_display
+                        c_value, a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -1213,79 +895,45 @@ impl BoolEvaluator {
     pub fn bool_not(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+     ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
             if a_value == b_value {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_not {} = not({})",
-                        a_display, b_display
+                        a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -1305,111 +953,60 @@ impl BoolEvaluator {
     pub fn bool_or(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let c_const: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_bool();
+            } else {
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for A_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for B_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(rv) = c_const {
-                rv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for C_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for C_TERM, found other type variable"),
-                }
-            };
-
             if c_value != (a_value || b_value) {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-
-                    let c_display = if c_key.is_none() {
-                        c_const.unwrap().to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-
                     info!(
                         r"Violated constraint: bool_or {} <-> {} \/ {}",
-                        c_display, a_display, b_display
+                        c_value, a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -1429,110 +1026,60 @@ impl BoolEvaluator {
     pub fn bool_xor(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_bool_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+        
+        let mut c_register = None;
+        let mut c_const = None;
+        if vars_involved.get(&C_TERM_INDEX).is_some() {
+            c_register = self.variable_map.get(vars_involved.get(&C_TERM_INDEX).unwrap()).copied();
+        }else{
+            c_const = Some(self.args_extractor.extract_bool_value(C_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let c_key: Option<String> = self.identifier_from_vars(&vars_involved, C_TERM_INDEX);
 
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_const: Option<bool> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let c_const: Option<bool> = if c_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(C_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            let c_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_bool();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+            if c_register.is_some() {
+                c_value = solution[c_register.unwrap() as usize].as_bool();
+            } else {
+                c_value = c_const.expect("Expected constant value for C_TERM");
+            }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for A_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bv) = b_const {
-                bv
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for B_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for B_TERM, found other type variable"),
-                }
-            };
-
-            let c_value = if let Some(rv) = c_const {
-                rv
-            } else {
-                let key_ref = c_key
-                    .as_ref()
-                    .expect("Expected variable key for C_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution for C_TERM")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for C_TERM, found other type variable"),
-                }
-            };
-
             if c_value != (a_value ^ b_value) {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let c_display = if c_key.is_none() {
-                        c_const.unwrap().to_string()
-                    } else {
-                        c_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool_xor {} <-> {} xor {}",
-                        c_display, a_display, b_display
+                        c_value, a_value, b_value
                     );
                 }
                 violation = 1.0;
@@ -1552,79 +1099,45 @@ impl BoolEvaluator {
     pub fn bool2int(
         &self,
         constraint: &CallWithDefines,
-        solution: &HashMap<String, VariableValue>,
-    ) -> Box<dyn Fn(&HashMap<String, VariableValue>) -> f64 + Send + Sync> {
+    ) -> Box<dyn Fn(&[VariableValue]) -> f64 + Send + Sync> {
+                let vars_involved = self.args_extractor.extract_literal_identifiers_with_index(&constraint.call.args);
         let verbose = self.verbose;
-        let vars_involved = self
-            .args_extractor
-            .extract_literal_identifiers_with_index(&constraint.call.args);
-        let a_key: Option<String> = self.identifier_from_vars(&vars_involved, A_TERM_INDEX);
-        let a_const: Option<bool> = if a_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_bool_value(A_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
-        let b_key: Option<String> = self.identifier_from_vars(&vars_involved, B_TERM_INDEX);
-        let b_const: Option<i64> = if b_key.is_none() {
-            Some(
-                self.args_extractor
-                    .extract_int_value(B_TERM_INDEX, &constraint.call, solution),
-            )
-        } else {
-            None
-        };
+        let mut a_register = None;
+        let mut a_const = None;
+        if vars_involved.get(&A_TERM_INDEX).is_some() {
+            a_register = self.variable_map.get(vars_involved.get(&A_TERM_INDEX).unwrap()).copied();
+        }else{
+           a_const = Some(self.args_extractor.extract_bool_value(A_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
+    
+        let mut b_register = None;
+        let mut b_const = None;
+        if vars_involved.get(&B_TERM_INDEX).is_some() {
+            b_register = self.variable_map.get(vars_involved.get(&B_TERM_INDEX).unwrap()).copied();
+        }else{
+            b_const = Some(self.args_extractor.extract_int_value(B_TERM_INDEX.try_into().unwrap(), &constraint.call, &HashMap::new()));
+        }
 
-        Box::new(move |solution: &HashMap<String, VariableValue>| {
+        Box::new(move |solution: &[VariableValue]| {
+            let a_value;
+            let b_value;
+            if a_register.is_some(){
+                a_value = solution[a_register.unwrap() as usize].as_bool();
+            } else {
+                a_value = a_const.expect("Expected constant value for A_TERM");
+            }
+            if b_register.is_some() {
+                b_value = solution[b_register.unwrap() as usize].as_int();
+            } else {
+                b_value = b_const.expect("Expected constant value for B_TERM");
+            }
+
             let mut violation = 0.0;
-
-            let a_value = if let Some(av) = a_const {
-                av
-            } else {
-                let key_ref = a_key
-                    .as_ref()
-                    .expect("Expected variable key for A_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Bool(b) => *b,
-                    _ => panic!("Expected bool variable for A_TERM, found other type variable"),
-                }
-            };
-
-            let b_value = if let Some(bc) = b_const {
-                bc
-            } else {
-                let key_ref = b_key
-                    .as_ref()
-                    .expect("Expected variable key for B_TERM when not a literal");
-                match solution
-                    .get(key_ref)
-                    .expect("Expected variable in solution")
-                {
-                    VariableValue::Int(i) => *i,
-                    _ => panic!("Expected int variable for B_TERM, found other type variable"),
-                }
-            };
-
             if a_value as i64 != b_value {
                 if verbose {
-                    let a_display = if a_key.is_none() {
-                        a_const.unwrap().to_string()
-                    } else {
-                        a_key.as_deref().unwrap_or("<const>").to_string()
-                    };
-                    let b_display = if b_key.is_none() {
-                        b_const.unwrap().to_string()
-                    } else {
-                        b_key.as_deref().unwrap_or("<const>").to_string()
-                    };
                     info!(
                         "Violated constraint: bool2int {} = {}",
-                        a_display, b_display
+                        a_value, b_value
                     );
                 }
                 violation = 1.0;

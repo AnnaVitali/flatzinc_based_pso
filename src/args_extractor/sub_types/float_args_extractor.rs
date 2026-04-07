@@ -26,7 +26,7 @@ impl FloatArgsExtractor {
     ///
     /// # Returns
     /// A `HashMap` mapping indices to identifier names.
-    pub fn extract_literal_identifier_with_index(&self, args: &[Argument]) -> HashMap<i64, String> {
+    pub fn extract_literal_identifiers_with_index(&self, args: &[Argument]) -> HashMap<i64, String> {
         self.args_extractor
             .extract_literal_identifiers_with_index(args)
     }

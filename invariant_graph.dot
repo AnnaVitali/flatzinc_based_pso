@@ -1,0 +1,11 @@
+digraph InvariantGraph {
+  n0 [label="constraint(id=0, call=array_bool_and)"];
+  n1 [label="variable(r)"];
+  n2 [label="variable(X_INTRODUCED_0_)"];
+  n3 [label="variable(X_INTRODUCED_1_)"];
+  n4 [label="variable(X_INTRODUCED_2_)"];
+  n2 -> n0 [label="2"];
+  n3 -> n0 [label="2"];
+  n4 -> n0 [label="2"];
+  n0 -> n1 [label="3"];
+}

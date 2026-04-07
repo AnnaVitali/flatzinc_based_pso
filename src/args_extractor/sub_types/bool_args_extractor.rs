@@ -46,6 +46,37 @@ impl BoolArgsExtractor {
         self.args_extractor.extract_literal_identifiers(args)
     }
 
+    pub fn extract_bool_array(
+    &self,
+    index: usize,
+    args: &[Argument],
+    arrays: &HashMap<String, Array>,
+) -> Vec<String> {
+    if let Some(arg) = args.get(index) {
+        match arg {
+            Argument::Literal(Literal::Identifier(array_key)) => {
+                if let Some(array) = arrays.get(array_key) {
+                    array.contents.iter().map(|elem| match elem {
+                        Literal::Identifier(i) => i.clone(),
+                        _ => panic!("Expected identifier in array for bool_clause constraint"),
+                    }).collect()
+                } else {
+                    vec![array_key.clone()]
+                }
+            }
+            Argument::Array(literals) => {
+                literals.iter().map(|elem| match elem {
+                    Literal::Identifier(i) => i.clone(),
+                    _ => panic!("Expected identifier in array for bool_clause constraint"),
+                }).collect()
+            }
+            _ => vec![],
+        }
+    } else {
+        vec![]
+    }
+}
+
     /// Extracts a boolean value from the constraint at the specified argument index.
     ///
     /// # Arguments
@@ -224,7 +255,7 @@ impl BoolArgsExtractor {
     ///
     /// # Returns
     /// A vector of boolean values extracted from the array argument.
-    pub fn extract_bool_array(
+    pub fn extract_bool_array_name(
         &self,
         index: usize,
         arrays: &HashMap<String, Array>,
