@@ -1,11 +1,9 @@
 use constraint_evaluator::heuristics::flatzinc_based_pso::FlatzincBasedPSO;
 use constraint_evaluator::heuristics::pso::PSO;
-use std::f32::consts::E;
 use std::path::Path;
 use std::sync::Arc;
 
 const MODEL: &str = "problem6";
-const VIOLATION_THRESHOLD: f64 = 1e-3;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_time = std::time::Instant::now();
@@ -17,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let w: f64 = 0.669;
     let c1: f64 = 2.385;
     let c2: f64 = 0.558;
-    let seed = 10; //rand::random_range(0..100);
+    let seed = rand::random_range(0..100);
 
     let eval_fn = |solution: &[f64]| {
         let x1 = solution[0];

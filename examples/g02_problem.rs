@@ -5,7 +5,6 @@ use constraint_evaluator::heuristics::pso::PSO;
 
 const N: usize = 20;
 const MODEL: &str = "g02";
-const VIOLATION_THRESHOLD: f64 = 1e-3;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_time = std::time::Instant::now();
@@ -17,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let c1: f64 = 2.385;
     let c2: f64 = 1.558;
 
-    let seed = 10; //rand::random_range(0..100);
+    let seed = rand::random_range(0..100);
 
     let eval_fn = |solution: &[f64]| {
         let x = solution;
