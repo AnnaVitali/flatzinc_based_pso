@@ -7,6 +7,7 @@ const MODEL: &str = "g11";
 const VIOLATION_THRESHOLD: f64 = 1e-3;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let start_time = std::time::Instant::now();
     let fzn_path = Path::new(".\\minizinc\\json_flatzinc").join(MODEL.to_string() + ".json");
     let ozn_path = Path::new(".\\minizinc").join(MODEL.to_string() + ".ozn");
 
@@ -15,16 +16,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let w: f64 = 0.669;
     let c1: f64 = 2.385;
     let c2: f64 = 0.558;
-    let seed = rand::random_range(0..100);
+    let seed = 10; //rand::random_range(0..100);
 
     let eval_fn = |solution: &[f64]| {
         let (x1, x2) = (solution[0], solution[1]);
 
-        // Constraint: x2 - x1^2 == 0.0 (equality)
         let constraint = (x2 - x1.powi(2)).abs();
-        let violation = constraint; // For equality, use absolute value as violation
+        let violation = constraint;
 
-        // Objective
         let objective = x1.powi(2) + (x2 - 1.0).powi(2);
 
         (objective, violation)
@@ -61,55 +60,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (obj_fltzinc, viol_fltzinc) = flatzinc_pso.search();
 
-    let mut score_viol_pso = 0;
-    let mut score_viol_fltzinc = 0;
+    let best_known_obj = 0.75;
+    println!("Best known objective: {}", best_known_obj);
 
-    // best known objective for g11 (placeholder — set real value if available)
-    let best_known_obj = 0.7499;
-
-    if viol_pso < viol_fltzinc {
-        println!(
-            "PSO violation < Flatzinc PSO violation: {} < {}",
-            viol_pso, viol_fltzinc
-        );
-        println!("difference in violation: {}", viol_fltzinc - viol_pso);
-        score_viol_pso += 1;
-    } else if viol_pso > viol_fltzinc {
-        println!(
-            "Flatzinc PSO violation < PSO violation: {} < {}",
-            viol_fltzinc, viol_pso
-        );
-        println!("difference in violation: {}", viol_pso - viol_fltzinc);
-        score_viol_fltzinc += 1;
-    }
-
-    if viol_pso <= VIOLATION_THRESHOLD || viol_fltzinc <= VIOLATION_THRESHOLD {
-        let distance_to_best = |obj: f64| (best_known_obj - obj).abs();
-        let distance_pso = distance_to_best(obj_pso);
-        let distance_flatzinc = distance_to_best(obj_fltzinc.unwrap());
-
-        if distance_pso < distance_flatzinc {
-            println!(
-                "PSO objective closer to best known objective: {} < {}",
-                obj_pso,
-                obj_fltzinc.unwrap()
-            );
-            println!("difference in objective: {}", obj_fltzinc.unwrap() - obj_pso);
-            score_viol_pso += 1;
-        } else if distance_pso > distance_flatzinc {
-            println!(
-                "Flatzinc PSO objective closer to best known objective: {} < {}",
-                obj_fltzinc.unwrap(),
-                obj_pso
-            );
-            println!("difference in objective: {}", obj_pso - obj_fltzinc.unwrap());
-            score_viol_fltzinc += 1;
-        }
-    }
-
-    println!("\nFinal Scores:");
-    println!("PSO: {}", score_viol_pso);
-    println!("Flatzinc PSO: {}", score_viol_fltzinc);
+    let elapsed_time = start_time.elapsed();
+    println!("Elapsed time: {:.2?}", elapsed_time);
 
     println!(
         "{{\"algorithm\":\"pso\", \"model\":\"{}\", \"objective\": {}, \"violation\": {}}}",

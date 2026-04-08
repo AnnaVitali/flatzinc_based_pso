@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let c1: f64 = 2.385;
     let c2: f64 = 1.558;
 
-    let seed = rand::random_range(0..100);
+    let seed = 10; //rand::random_range(0..100);
 
     let eval_fn = |solution: &[f64]| {
         let x = solution;
@@ -82,52 +82,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (obj_fltzinc, viol_fltzinc) = flatzinc_pso.search();
 
-    let mut score_viol_pso = 0;
-    let mut score_viol_fltzinc = 0;
-
     let best_known_obj = -0.80361910412559;
+    println!("Best known objective: {}", best_known_obj);
 
-    if viol_pso < viol_fltzinc {
-        println!(
-            "PSO violation < Flatzinc PSO violation: {} < {}",
-            viol_pso, viol_fltzinc
-        );
-        println!("difference in violation: {}", viol_fltzinc - viol_pso);
-        score_viol_pso += 1;
-    } else if viol_pso > viol_fltzinc {
-        println!(
-            "Flatzinc PSO violation < PSO violation: {} < {}",
-            viol_fltzinc, viol_pso
-        );
-        println!("difference in violation: {}", viol_pso - viol_fltzinc);
-        score_viol_fltzinc += 1;
-    }
+    let elapsed_time = start_time.elapsed();
+    println!("Elapsed time: {:.2?}", elapsed_time);
 
-    if viol_pso <= VIOLATION_THRESHOLD || viol_fltzinc <= VIOLATION_THRESHOLD {
-        let distance_to_best = |obj: f64| (best_known_obj - obj).abs();
-        let distance_pso = distance_to_best(obj_pso);
-        let distance_flatzinc = distance_to_best(obj_fltzinc.unwrap());
-
-        if distance_pso < distance_flatzinc {
-            println!(
-                "PSO objective closer to best known objective: {} < {}",
-                obj_pso,
-                obj_fltzinc.unwrap()
-            );
-            println!("difference in objective: {}", obj_fltzinc.unwrap() - obj_pso);
-            score_viol_pso += 1;
-        } else if distance_pso > distance_flatzinc {
-            println!(
-                "Flatzinc PSO objective closer to best known objective: {} < {}",
-                obj_fltzinc.unwrap(),
-                obj_pso
-            );
-            println!("difference in objective: {}", obj_pso - obj_fltzinc.unwrap());
-            score_viol_fltzinc += 1;
-        }
-    }
-
-    // Output machine-readable summaries for external parsing (one per algorithm)
     println!(
         "{{\"algorithm\":\"pso\", \"model\":\"{}\", \"objective\": {}, \"violation\": {}}}",
         MODEL, obj_pso, viol_pso
@@ -138,13 +98,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         obj_fltzinc.unwrap_or(f64::NAN),
         viol_fltzinc
     );
-
-    println!("\nFinal Scores:");
-    println!("PSO: {}", score_viol_pso);
-    println!("Flatzinc PSO: {}", score_viol_fltzinc);
-
-    let elapsed_time = start_time.elapsed();
-    println!("Total execution time: {:.2?}", elapsed_time);
 
     Ok(())
 }
