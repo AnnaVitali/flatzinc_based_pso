@@ -15,7 +15,8 @@ use std::collections::{HashMap, HashSet};
 pub struct SetVariableAssigner {
     /// An instance of `SetArgsExtractor` used to extract arguments from set constraints.
     args_extractor: SetArgsExtractor,
-    variable_map: HashMap<String, Register>,
+    /// A hashmap that maps variable names to their corresponding registers, used for resolving variable references in constraints.
+    variable_register_map: HashMap<String, Register>,
     /// A hashmap that maps identifiers to their corresponding arrays, used for resolving array references in constraints.
     arrays: HashMap<String, Array>,
 }
@@ -25,16 +26,16 @@ impl SetVariableAssigner {
     ///
     /// # Arguments
     /// * `arrays` - A map from identifiers to arrays used in set constraints.
-    /// * `variable_map` - A map from variable names to their corresponding registers.
+    /// * `variable_register_map` - A map from variable names to their corresponding registers.
     ///
     /// # Returns
     /// A new instance of `SetVariableAssigner`.
-    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_register_map: HashMap<String, Register>) -> Self {
         let args_extractor = SetArgsExtractor::new();
 
         Self {
             args_extractor,
-            variable_map,
+            variable_register_map,
             arrays,
         }
     }
@@ -54,7 +55,7 @@ impl SetVariableAssigner {
             .args_extractor
             .extract_literal_identifiers_with_index(&constraint.call.args);
         let index_register = self
-            .variable_map
+            .variable_register_map
             .get(vars_involved.get(&X_TERM_INDEX).unwrap())
             .copied()
             .expect("Index register not found");
@@ -86,6 +87,12 @@ impl SetVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `set_in` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    /// # Returns
+    /// A closure that, given a solution, returns whether an integer is in a set.
     pub fn array_var_set_element(
         &self,
         constraint: &CallWithDefines,
@@ -94,7 +101,7 @@ impl SetVariableAssigner {
             .args_extractor
             .extract_literal_identifiers_with_index(&constraint.call.args);
         let index_register = self
-            .variable_map
+            .variable_register_map
             .get(vars_involved.get(&X_TERM_INDEX).unwrap())
             .copied()
             .expect("Index register not found");
@@ -112,7 +119,7 @@ impl SetVariableAssigner {
         let array_registers: Vec<Register> = array
             .iter()
             .map(|var_name| {
-                self.variable_map
+                self.variable_register_map
                     .get(var_name)
                     .copied()
                     .expect(&format!("Variable {} not found in variable map", var_name))
@@ -156,7 +163,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -169,7 +176,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -221,7 +228,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -264,7 +271,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -278,7 +285,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -292,7 +299,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -361,7 +368,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -375,7 +382,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -389,7 +396,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -458,7 +465,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -471,7 +478,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -523,7 +530,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -537,7 +544,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -551,7 +558,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -626,7 +633,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -640,7 +647,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -654,7 +661,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -729,7 +736,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -743,7 +750,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -757,7 +764,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -826,7 +833,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -840,7 +847,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -854,7 +861,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -923,7 +930,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -937,7 +944,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else if y_register.is_none() {
@@ -951,7 +958,7 @@ impl SetVariableAssigner {
         let mut r_const = None;
         if vars_involved.get(&R_TERM_INDEX).is_some() {
             r_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&R_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -1020,7 +1027,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -1033,7 +1040,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -1085,7 +1092,7 @@ impl SetVariableAssigner {
         let mut x_const = None;
         if vars_involved.get(&X_TERM_INDEX).is_some() {
             x_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&X_TERM_INDEX).unwrap())
                 .copied();
         } else {
@@ -1098,7 +1105,7 @@ impl SetVariableAssigner {
         let mut y_const = None;
         if vars_involved.get(&Y_TERM_INDEX).is_some() {
             y_register = self
-                .variable_map
+                .variable_register_map
                 .get(vars_involved.get(&Y_TERM_INDEX).unwrap())
                 .copied();
         } else {

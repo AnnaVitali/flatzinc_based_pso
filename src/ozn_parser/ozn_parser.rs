@@ -6,7 +6,9 @@ use std::path::Path;
 #[allow(dead_code)]
 /// An enum representing the mapping of an output variable, which can be either a scalar or an array, along with its source.
 pub enum OznMapping {
+    /// A scalar variable mapping, containing the source of the variable.
     Scalar { source: String },
+    /// An array variable mapping, containing the source of the array.
     Array { source: String },
 }
 

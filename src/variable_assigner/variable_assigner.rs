@@ -103,10 +103,10 @@ impl VariableAssigner {
     /// Assigns values to the defined variables based on the provided partial solution and the constraints that define these variables.
     ///
     /// # Arguments
-    /// * `partial_solution` - A hashmap representing the current partial solution, mapping variable names to their values.
+    /// * `partial_solution_vec` - A vector of optional `VariableValue` representing the current partial solution, where each index corresponds to a variable register.
     /// This is used as the basis for computing the values of the defined variables.
     /// # Returns
-    /// A hashmap representing the complete solution after assigning values to the defined variables, mapping variable names to their assigned values.
+    /// A vector of optional `VariableValue` representing the complete solution, where the defined variables have been assigned values based on the constraints and the partial solution.
     pub fn assign_defined_variables(
         &mut self,
         partial_solution_vec: &[Option<VariableValue>],

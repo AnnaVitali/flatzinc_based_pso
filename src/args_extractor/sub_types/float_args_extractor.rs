@@ -6,6 +6,7 @@ use std::collections::HashMap;
 /// A helper struct for extracting float arguments from constraints,
 /// utilizing an internal `ArgsExtractor` for common extraction logic.
 pub struct FloatArgsExtractor {
+    /// An internal `ArgsExtractor` used for extracting various types of arguments from constraints.
     args_extractor: ArgsExtractor,
 }
 
@@ -38,7 +39,6 @@ impl FloatArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted float value.
@@ -56,7 +56,6 @@ impl FloatArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted boolean value.
@@ -70,7 +69,6 @@ impl FloatArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted integer value.

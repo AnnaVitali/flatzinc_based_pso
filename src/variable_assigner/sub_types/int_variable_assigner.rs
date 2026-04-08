@@ -32,12 +32,12 @@ impl IntVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `IntVariableAssigner`.
-    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_register_map: HashMap<String, Register>) -> Self {
         let args_extractor = IntArgsExtractor::new();
 
         Self {
             args_extractor,
-            variable_register_map: variable_map,
+            variable_register_map,
             arrays,
         }
     }
@@ -80,6 +80,12 @@ impl IntVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `array_var_int_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    /// # Returns
+    /// A closure that, given a solution, returns the integer value from the array of variables based on the index provided in the solution.
     pub fn array_var_int_element(
         &self,
         constraint: &CallWithDefines,

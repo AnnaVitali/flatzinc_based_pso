@@ -15,7 +15,6 @@ pub const R_TERM_INDEX: i64 = 1;
 pub const COEFF_LIN_CONSTR_INDEX: usize = 0;
 
 /// Evaluator for boolean constraints in MiniZinc models, providing functional evaluators for various boolean operations.
-///
 /// This struct stores arrays, an argument extractor, and a verbosity flag, and provides methods to generate functional evaluators for boolean constraints such as AND, OR, XOR, NOT, and reified versions.
 #[derive(Debug, Clone, Default)]
 pub struct BoolEvaluator {
@@ -34,20 +33,20 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `arrays` - Map of array identifiers to their values.
-    /// * `variable_map` - Map of variable identifiers to their register values.
+    /// * `variable_register_map` - Map of variable identifiers to their register values.
     /// * `verbose` - If true, enables verbose logging of constraint violations.
     ///
     /// # Returns
     /// A new `BoolFunctionalEvaluator` instance.
     pub fn new(
         arrays: HashMap<String, Array>,
-        variable_map: HashMap<String, Register>,
+        variable_register_map: HashMap<String, Register>,
         verbose: bool,
     ) -> Self {
         let args_extractor = BoolArgsExtractor::new();
         Self {
             arrays,
-            variable_register_map: variable_map,
+            variable_register_map,
             args_extractor,
             verbose,
         }
@@ -57,7 +56,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
@@ -133,7 +131,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
@@ -184,6 +181,12 @@ impl BoolEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `array_var_bool_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn array_var_bool_element(
         &self,
         constraint: &CallWithDefines,
@@ -293,7 +296,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
@@ -469,7 +471,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
@@ -539,7 +540,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_eq_reif(
@@ -631,7 +631,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_le(
@@ -700,7 +699,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_le_reif(
@@ -956,7 +954,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_lt(
@@ -1025,7 +1022,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_lt_reif(
@@ -1117,7 +1113,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_not(
@@ -1189,7 +1184,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_or(
@@ -1281,7 +1275,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool_xor(
@@ -1373,7 +1366,6 @@ impl BoolEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn bool2int(

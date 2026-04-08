@@ -1,8 +1,8 @@
 use crate::args_extractor::sub_types::int_args_extractor::IntArgsExtractor;
 use crate::data_utility::logger::write_verbose_output;
 use crate::data_utility::types::Register;
-use crate::evaluator::mini_evaluator::CallWithDefines;
 use crate::data_utility::types::VariableValue;
+use crate::evaluator::mini_evaluator::CallWithDefines;
 use flatzinc_serde::{Array, Literal};
 use log::info;
 use std::collections::HashMap;
@@ -37,20 +37,20 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `arrays` - A map of identifiers to arrays used in constraint evaluation.
-    /// * `variable_map` - A map of variable identifiers to their corresponding registers.
+    /// * `variable_register_map` - A map of variable identifiers to their corresponding registers.
     /// * `verbose` - Boolean flag to enable verbose output for debugging.
     ///
     /// # Returns
     /// A new `IntFunctionalEvaluator` instance.
     pub fn new(
         arrays: HashMap<String, Array>,
-        variable_map: HashMap<String, Register>,
+        variable_register_map: HashMap<String, Register>,
         verbose: bool,
     ) -> Self {
         let args_extractor = IntArgsExtractor::new();
         Self {
             arrays,
-            variable_register_map: variable_map,
+            variable_register_map,
             args_extractor,
             verbose,
         }
@@ -60,7 +60,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn array_int_element(
@@ -110,6 +109,12 @@ impl IntEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `array_var_int_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn array_var_int_element(
         &self,
         constraint: &CallWithDefines,
@@ -168,7 +173,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_abs(
@@ -238,7 +242,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_div(
@@ -335,7 +338,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_eq(
@@ -402,7 +404,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_eq_reif(
@@ -494,7 +495,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_le(
@@ -560,7 +560,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_le_reif(
@@ -651,7 +650,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_lin_eq(
@@ -706,7 +704,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_eq_reif(
@@ -782,7 +779,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_lin_le(
@@ -836,7 +832,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_le_reif(
@@ -912,7 +907,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_ne(
@@ -967,7 +961,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lin_ne_reif(
@@ -1043,7 +1036,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_lt(
@@ -1111,7 +1103,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_lt_reif(
@@ -1201,7 +1192,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_max(
@@ -1293,7 +1283,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_min(
@@ -1385,7 +1374,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_mod(
@@ -1477,7 +1465,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_ne(
@@ -1545,7 +1532,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn int_ne_reif(
@@ -1636,7 +1622,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_pow(
@@ -1728,7 +1713,6 @@ impl IntEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int_times(

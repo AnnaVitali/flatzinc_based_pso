@@ -40,14 +40,14 @@ impl SetEvaluator {
     /// A new instance of `SetFunctionalEvaluator`.
     pub fn new(
         arrays: HashMap<String, Array>,
-        variable_map: HashMap<String, Register>,
+        variable_register_map: HashMap<String, Register>,
         verbose: bool,
     ) -> Self {
         let args_extractor = SetArgsExtractor::new();
 
         Self {
             arrays,
-            variable_register_map: variable_map,
+            variable_register_map,
             args_extractor,
             verbose,
         }
@@ -57,7 +57,7 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
+
     /// # Returns
     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn array_set_element(
@@ -117,6 +117,12 @@ impl SetEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `array_var_set_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+     /// # Returns
+     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn array_var_set_element(
         &self,
         constraint: &CallWithDefines,
@@ -191,7 +197,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn set_card(
@@ -263,7 +268,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the symmetric difference count if violated, 0.0 otherwise.
     pub fn set_diff(
@@ -357,7 +361,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the symmetric difference count if violated, 0.0 otherwise.
     pub fn set_eq(
@@ -425,7 +428,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_eq_reif(
@@ -515,7 +517,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_in(
@@ -583,7 +584,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_in_reif(
@@ -673,7 +673,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn set_intersect(
@@ -765,7 +764,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the violation count if violated, 0.0 otherwise.
     pub fn set_le(
@@ -845,7 +843,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_le_reif(
@@ -942,7 +939,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the violation count if violated, 0.0 otherwise.
     pub fn set_lt(
@@ -1022,7 +1018,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_lt_reif(
@@ -1119,7 +1114,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_ne(
@@ -1187,7 +1181,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_ne_reif(
@@ -1278,7 +1271,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn set_subset(
@@ -1349,7 +1341,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_subset_reif(
@@ -1440,7 +1431,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn set_superset(
@@ -1511,7 +1501,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn set_superset_reif(
@@ -1602,7 +1591,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn set_symdiff(
@@ -1694,7 +1682,6 @@ impl SetEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `_solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the set difference count if violated, 0.0 otherwise.
     pub fn set_union(

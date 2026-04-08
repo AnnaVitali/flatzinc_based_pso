@@ -37,16 +37,16 @@ impl FloatEvaluator {
     ///
     /// # Arguments
     /// * `arrays` - Map of array identifiers to their values.
-    /// * `variable_map` - Map of variable identifiers to their registers.
+    /// * `variable_register_map` - Map of variable identifiers to their registers.
     /// * `verbose` - If true, enables verbose logging of constraint violations.
     ///
     /// # Returns
     /// A new `FloatFunctionalEvaluator` instance.
-    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>, verbose: bool) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_register_map: HashMap<String, Register>, verbose: bool) -> Self {
         let args_extractor = FloatArgsExtractor::new();
         Self {
             arrays,
-            variable_register_map: variable_map,
+            variable_register_map,
             args_extractor,
             verbose,
         }
@@ -56,7 +56,6 @@ impl FloatEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
@@ -91,6 +90,12 @@ impl FloatEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `array_var_float_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn array_var_float_element(
         &self,
         constraint: &CallWithDefines,
@@ -131,7 +136,6 @@ impl FloatEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
@@ -186,7 +190,6 @@ impl FloatEvaluator {
     ///
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     ///
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
@@ -241,7 +244,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_acosh(
@@ -294,7 +296,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_asin(
@@ -344,6 +345,12 @@ impl FloatEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `float_asinh` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_asinh(
         &self,
         constraint: &CallWithDefines,
@@ -395,7 +402,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_atan(
@@ -445,6 +451,12 @@ impl FloatEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `float_atanh` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_atanh(
         &self,
         constraint: &CallWithDefines,
@@ -503,7 +515,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_cos(
@@ -553,6 +564,12 @@ impl FloatEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `float_cosh` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_cosh(
         &self,
         constraint: &CallWithDefines,
@@ -604,7 +621,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_div(
@@ -679,7 +695,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_eq(
@@ -732,7 +747,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_eq_reif(
@@ -801,7 +815,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_exp(
@@ -852,6 +865,12 @@ impl FloatEvaluator {
         })
     }
 
+    /// Returns a functional evaluator for the `float_atanh` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint call with defines.
+    /// # Returns
+    /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_le(
         &self,
         constraint: &CallWithDefines,
@@ -901,7 +920,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_le_reif(
@@ -969,7 +987,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_eq(
@@ -1012,7 +1029,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_eq_reif(
@@ -1068,7 +1084,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_le(
@@ -1111,7 +1126,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_le_reif(
@@ -1168,7 +1182,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_lt(
@@ -1211,7 +1224,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_lt_reif(
@@ -1268,7 +1280,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_ne(
@@ -1311,7 +1322,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lin_ne_reif(
@@ -1368,7 +1378,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_ln(
@@ -1422,7 +1431,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_log10(
@@ -1476,7 +1484,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_log2(
@@ -1530,7 +1537,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lt(
@@ -1584,7 +1590,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_lt_reif(
@@ -1651,7 +1656,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_max(
@@ -1721,7 +1725,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_min(
@@ -1791,7 +1794,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn float_ne(
@@ -1845,7 +1847,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns 1.0 if violated, 0.0 otherwise.
     pub fn float_ne_reif(
@@ -1913,7 +1914,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_plus(
@@ -1983,7 +1983,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_pow(
@@ -2053,7 +2052,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_sin(
@@ -2107,7 +2105,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_sinh(
@@ -2161,7 +2158,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_sqrt(
@@ -2215,7 +2211,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_tan(
@@ -2269,7 +2264,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_tanh(
@@ -2323,7 +2317,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn float_times(
@@ -2393,7 +2386,6 @@ impl FloatEvaluator {
     /// 
     /// # Arguments
     /// * `constraint` - The constraint call with defines.
-    /// * `solution` - The current solution map.
     /// # Returns
     /// A closure that evaluates the constraint and returns the absolute difference if violated, 0.0 otherwise.
     pub fn int2float(

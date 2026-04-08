@@ -6,6 +6,7 @@ use std::collections::HashMap;
 /// A helper struct for extracting boolean arguments from constraints,
 /// utilizing an internal `ArgsExtractor` for common extraction logic.
 pub struct BoolArgsExtractor {
+    /// An internal `ArgsExtractor` used for extracting various types of arguments from constraints.
     args_extractor: ArgsExtractor,
 }
 
@@ -76,7 +77,6 @@ impl BoolArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted boolean value.
@@ -90,7 +90,6 @@ impl BoolArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted integer value.

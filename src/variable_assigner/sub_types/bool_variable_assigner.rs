@@ -31,12 +31,12 @@ impl BoolVariableAssigner {
     ///
     /// # Returns
     /// A new instance of `BoolVariableAssigner`.
-    pub fn new(arrays: HashMap<String, Array>, variable_map: HashMap<String, Register>) -> Self {
+    pub fn new(arrays: HashMap<String, Array>, variable_register_map: HashMap<String, Register>) -> Self {
         let args_extractor = BoolArgsExtractor::new();
 
         Self {
             args_extractor,
-            variable_register_map: variable_map,
+            variable_register_map,
             arrays,
         }
     }
@@ -154,6 +154,12 @@ impl BoolVariableAssigner {
         })
     }
 
+    /// Returns a closure that evaluates the `array_var_bool_element` constraint.
+    /// 
+    /// # Arguments
+    /// * `constraint` - The constraint and its defines to evaluate.
+    /// # Returns
+    /// A closure that, given a solution, returns the result of extracting a boolean element from an array of variables based on the index provided in the solution.
     pub fn array_var_bool_element(
         &self,
         constraint: &CallWithDefines,

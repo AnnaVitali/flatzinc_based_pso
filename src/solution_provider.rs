@@ -310,7 +310,22 @@ impl SolutionProvider {
         }
     }
 
-    fn find_variable_name(&mut self, name: &String) -> String {
+    /// Returns a reference to the map of variables to their values.
+    pub fn solution_map(&self) -> &HashMap<String, VariableValue> {
+        &self.tobe_defined_vars_map
+    }
+
+    /// Returns a reference to the set of defined variable names.
+    pub fn defined_vars_map(&self) -> &HashSet<String> {
+        &self.defined_vars_map
+    }
+
+    /// Returns a reference to the map of array element references.
+    pub fn array_elements_map(&self) -> &HashMap<String, String> {
+        &self.array_elements_map
+    }
+
+     fn find_variable_name(&mut self, name: &String) -> String {
         let target_name = if self.variable_exist(&name) {
             name.clone()
         } else {
@@ -325,20 +340,5 @@ impl SolutionProvider {
     fn variable_exist(&self, name: &str) -> bool {
         self.output.contains(&name.to_string())
             || self.fzn.variables.iter().any(|(id, _)| id == name)
-    }
-
-    /// Returns a reference to the map of variables to their values.
-    pub fn solution_map(&self) -> &HashMap<String, VariableValue> {
-        &self.tobe_defined_vars_map
-    }
-
-    /// Returns a reference to the set of defined variable names.
-    pub fn defined_vars_map(&self) -> &HashSet<String> {
-        &self.defined_vars_map
-    }
-
-    /// Returns a reference to the map of array element references.
-    pub fn array_elements_map(&self) -> &HashMap<String, String> {
-        &self.array_elements_map
     }
 }

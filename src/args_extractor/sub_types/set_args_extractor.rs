@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 /// A helper struct for extracting set arguments from constraints,
 /// utilizing an internal `ArgsExtractor` for common extraction logic.
 pub struct SetArgsExtractor {
+    /// An internal `ArgsExtractor` used for extracting various types of arguments from constraints.
     args_extractor: ArgsExtractor,
 }
 
@@ -37,7 +38,6 @@ impl SetArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// A `HashSet<i64>` representing the extracted set.
@@ -65,7 +65,6 @@ impl SetArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted boolean value.
@@ -79,7 +78,6 @@ impl SetArgsExtractor {
     /// # Arguments
     /// * `index` - The index of the argument in the constraint.
     /// * `constraint` - The constraint call containing the argument.
-    /// * `solution` - The solution map for resolving identifiers.
     ///
     /// # Returns
     /// The extracted integer value.

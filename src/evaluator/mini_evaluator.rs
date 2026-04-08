@@ -1,11 +1,11 @@
 use crate::data_utility::types::Register;
+use crate::data_utility::types::VariableValue;
 use crate::evaluator::sub_types::bool_evaluator::BoolEvaluator;
 use crate::evaluator::sub_types::float_evaluator::FloatEvaluator;
 use crate::evaluator::sub_types::int_evaluator::IntEvaluator;
 use crate::evaluator::sub_types::set_evaluator::SetEvaluator;
 use crate::invariant_graph::InvariantGraph;
 use crate::solution_provider::SolutionProvider;
-use crate::data_utility::types::VariableValue;
 use crate::variable_assigner::variable_assigner::VariableAssigner;
 use env_logger::Env;
 use flatzinc_serde::{Array, Constraint, Domain, FlatZinc, Literal, Type};
@@ -35,6 +35,7 @@ pub struct MiniEvaluator {
     variable_bounds: HashMap<String, (VariableValue, VariableValue)>,
     /// A map from variable names to their corresponding register IDs.
     variable_register_map: HashMap<String, Register>,
+    /// A vector representing the current solution values for each variable, indexed by their register IDs, used for efficient access during constraint evaluation.
     solution_vec: Vec<VariableValue>,
     /// A vector of constraints along with their defines (if any) to be evaluated.
     constraints: Vec<CallWithDefines>,
