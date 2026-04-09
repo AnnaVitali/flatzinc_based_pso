@@ -1,4 +1,5 @@
-use crate::data_utility::minizinc_solution_normalizer::MiniZincSolutionNormalizer;
+use crate::data_utility::solution_normalizer::SolutionNormalizer;
+use crate::data_utility::types::Register;
 use crate::data_utility::types::VariableValue;
 use crate::evaluator::mini_evaluator::MiniEvaluator;
 use crate::heuristics::pso_utility::is_better_candidate;
@@ -8,7 +9,7 @@ use rand::RngExt;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use serde_json::from_str;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
@@ -22,19 +23,20 @@ pub struct FlatzincBasedParticle {
     /// A unique identifier for the particle, used for tracking and debugging purposes.
     id: i64,
     /// A normalizer for converting between the particle's position representation and the variable values in the FlatZinc problem, based on variable bounds.
-    normalizer: MiniZincSolutionNormalizer,
-    /// A map of variable names to their corresponding `Variable` definitions from the FlatZinc model, used for understanding variable types and domains.
-    variables: HashMap<String, Variable>,
-    /// A map of variable names to their corresponding indices in the particle's position vector, facilitating the mapping between the particle's internal representation and the FlatZinc variables.
-    variable_index: HashMap<String, usize>,
+    normalizer: SolutionNormalizer,
+    variables: BTreeMap<String, Variable>,
+    variables_index:  BTreeMap<String, usize>,
+    map_index_register: BTreeMap<usize, Register>,
+    variable_registers: Vec<Register>,
+    solution: Vec<Option<VariableValue>>,
     /// A vector representing the current position of the particle in the normalized search space, where each value is typically in the range [0, 1].
     position: Vec<f64>,
     /// A vector representing the current velocity of the particle in the normalized search space, which influences how the particle moves towards its local and global best positions.
     velocity: Vec<f64>,
-    /// A map of variable names to their corresponding (min, max) bounds, used for normalizing and denormalizing the particle's position values.
-    variable_bounds: HashMap<String, (VariableValue, VariableValue)>,
-    /// A map representing the best known position of the particle in terms of variable values, which is updated whenever the particle finds a better solution.
-    local_best_position: HashMap<String, f64>,
+    /// A vector of tuples representing the (min, max) bounds for each variable in the FlatZinc problem, used for normalizing and denormalizing the particle's position values.
+    variable_bounds: Vec<(f64, f64)>,
+    /// A vector representing the best known position of the particle in terms of variable values, which is updated whenever the particle finds a better solution.
+    local_best_position: Vec<f64>,
     /// The objective value of the best known solution for the particle, used for comparing against other solutions and guiding the search process.
     local_best_obj: Option<f64>,
     /// The total violation of constraints for the best known solution of the particle, used for determining feasibility and guiding the search process.
@@ -45,8 +47,6 @@ pub struct FlatzincBasedParticle {
     invariant_evaluator: MiniEvaluator,
     /// The file path to the FlatZinc model, used for initializing the particle and providing context for the solution provider and invariant evaluator.
     fzn_path: PathBuf,
-    /// The file path to the FlatZinc output solution, used for initializing the particle and providing context for the solution provider and invariant evaluator.
-    ozn_path: PathBuf,
     /// A random number generator for the particle, used for introducing stochasticity in the velocity and position updates, as well as for random initialization.
     rng: ChaCha20Rng,
     /// A counter for tracking how many consecutive iterations the particle has gone without improving its local best solution, used for implementing a stagnation-based reinitialization strategy.
@@ -71,15 +71,13 @@ pub struct FlatzincBasedPSO {
     /// A vector of particles that make up the swarm, each of which explores the search space and maintains its own local best solution.
     swarm: Vec<FlatzincBasedParticle>,
     /// A map representing the best known position found by any particle in the swarm, which is used to guide the search process of all particles.
-    global_best_position: HashMap<String, VariableValue>,
+    global_best_position: Vec<f64>,
     /// The objective value of the global best solution found by the swarm, used for comparing against other solutions and guiding the search process.
     global_best_obj: Option<f64>,
     /// The total violation of constraints for the global best solution found by the swarm, used for determining feasibility and guiding the search process.
     global_best_violation: f64,
     /// The file path to the FlatZinc model, used for initializing the particles and providing context for the solution providers and invariant evaluators.
     fzn_path: PathBuf,
-    /// The file path to the FlatZinc output solution, used for initializing the particles and providing context for the solution providers and invariant evaluators.
-    ozn_path: PathBuf,
 }
 
 /// Implements the `Default` trait for `FlatzincBasedParticle`, providing a default constructor that initializes all fields with default values.
@@ -87,19 +85,21 @@ impl Default for FlatzincBasedParticle {
     fn default() -> Self {
         Self {
             id: 0,
-            normalizer: MiniZincSolutionNormalizer::default(),
-            variables: HashMap::new(),
-            variable_index: HashMap::new(),
+            normalizer: SolutionNormalizer::default(),
+            variables: BTreeMap::new(),
+            variables_index: BTreeMap::new(),
+            map_index_register: BTreeMap::new(),
+            variable_registers: Vec::new(),
+            solution: Vec::new(),
             position: Vec::new(),
             velocity: Vec::new(),
-            variable_bounds: HashMap::new(),
-            local_best_position: HashMap::new(),
+            variable_bounds: Vec::new(),
+            local_best_position: Vec::new(),
             local_best_obj: None,
             local_best_violation: std::f64::INFINITY,
             solution_provider: Default::default(),
             invariant_evaluator: Default::default(),
             fzn_path: Default::default(),
-            ozn_path: Default::default(),
             rng: ChaCha20Rng::seed_from_u64(DEFAULT_SEED),
             stagnation_counter: 0,
         }
@@ -120,12 +120,10 @@ impl FlatzincBasedParticle {
     /// * `seed` - A seed value for initializing the random number generator, ensuring reproducibility of the particle's behavior.
     /// * `id` - A unique identifier for the particle, used for tracking and debugging purposes.
     /// * `fzn_path` - The file path to the FlatZinc model, used for loading the problem definition and initializing the solution provider and invariant evaluator.
-    /// * `ozn_path` - The file path to the FlatZinc output solution, used for initializing the solution provider and invariant evaluator with context about the expected solution format.
-    pub fn initialize(&mut self, seed: i64, id: i64, fzn_path: PathBuf, ozn_path: PathBuf) {
+    pub fn initialize(&mut self, seed: i64, id: i64, fzn_path: PathBuf) {
         self.id = id;
         self.rng = ChaCha20Rng::seed_from_u64(seed as u64 + id as u64);
         self.fzn_path = fzn_path;
-        self.ozn_path = ozn_path;
         let mut s = String::new();
         let file = File::open(&self.fzn_path).expect("Failed to open fzn file");
         BufReader::new(file)
@@ -133,9 +131,10 @@ impl FlatzincBasedParticle {
             .expect("Failed to read fzn file");
         let s = s.strip_prefix("\u{feff}").unwrap_or(&s);
         let fzn: FlatZinc = from_str(s).expect("Failed to parse flatzinc json");
-        self.solution_provider = SolutionProvider::new(fzn.clone(), &self.ozn_path);
+        self.solution_provider = SolutionProvider::new(fzn.clone());
+        self.variable_registers = self.solution_provider.get_decision_var_registers();
+        self.solution = vec![None; fzn.variables.len()];
         self.invariant_evaluator = MiniEvaluator::new(&*self.fzn_path, fzn.clone(), None);
-
         let mut vars: Vec<(String, Variable)> = fzn
             .variables
             .iter()
@@ -144,64 +143,66 @@ impl FlatzincBasedParticle {
             .collect();
 
         vars.sort_by_key(|(id, _)| Self::var_index(id).unwrap_or(usize::MAX));
-
-        self.variables.clear();
-        self.variable_index.clear();
+    
+        let variable_registers_map = self.solution_provider.get_vars_register_map();
         for (idx, (name, var)) in vars.into_iter().enumerate() {
-            self.variables.insert(name.clone(), var);
-            self.variable_index.insert(name, idx + 1); // 1-based index
+            if !var.defined{
+                self.variables.insert(name.clone(), var);
+                self.variables_index.insert(name.clone(), idx); // 1-based index
+                self.map_index_register.insert(idx, variable_registers_map.get(&name).copied().expect("Register not found for variable"));
+            }
         }
+
+        self.variable_bounds = vec![(0.0, 0.0); self.variables.len()];
+        for (var, id) in &self.variables_index {
+
+            let variable = self.variables.get(var).expect("Variable not found in variables map");
+            match variable.ty {
+                Type::Int => {
+                    let domain = variable
+                        .domain
+                        .as_ref()
+                        .unwrap_or_else(|| panic!("No domain for variable `{}`", var));
+                    match domain {
+                        Domain::Int(range) => {
+                            let min_v = *range.lower_bound().unwrap();
+                            let max_v = *range.upper_bound().unwrap();
+                            self.variable_bounds[*id] = (min_v as f64, max_v as f64);
+                        }
+                        _ => panic!("Non-integer domain for int variable `{}`", var),
+                    };
+                }
+                Type::Bool => {
+                    self.variable_bounds[*id] = (0.0, 1.0);
+                }
+                Type::Float => {
+                    let domain = variable
+                        .domain
+                        .as_ref()
+                        .unwrap_or_else(|| panic!("No domain for variable `{}`", var));
+                    match domain {
+                        Domain::Float(range) => {
+                            let min_v = *range.lower_bound().unwrap();
+                            let max_v = *range.upper_bound().unwrap();
+                            self.variable_bounds[*id] = (min_v, max_v);
+                        }
+                        _ => panic!("Non-floating domain for float variable `{}`", var),
+                    };
+                }
+                _ => continue,
+            }
+        }
+        
+        self.normalizer = SolutionNormalizer::new(self.variable_bounds.clone());
+
     }
 
     /// Randomly initializes the particle's position and velocity based on the variable bounds defined in the FlatZinc model.
     /// This method populates the `variable_bounds` map with the min and max values for each variable, then initializes the `position` and `velocity`
     /// vectors with random values in the normalized space [0, 1] for position and a small range for velocity.
     pub fn random_initialize_position_and_velocity(&mut self) {
-        for (identifier, variable) in &self.variables {
-            let key = identifier.to_string();
-
-            match variable.ty {
-                Type::Int => {
-                    let domain = variable
-                        .domain
-                        .as_ref()
-                        .unwrap_or_else(|| panic!("No domain for variable `{}`", identifier));
-                    match domain {
-                        Domain::Int(range) => {
-                            let min_v = *range.lower_bound().unwrap();
-                            let max_v = *range.upper_bound().unwrap();
-                            self.variable_bounds.insert(
-                                key.clone(),
-                                (VariableValue::Int(min_v), VariableValue::Int(max_v)),
-                            );
-                        }
-                        _ => panic!("Non-integer domain for int variable `{}`", identifier),
-                    };
-                }
-                Type::Bool => {
-                    self.variable_bounds
-                        .insert(key, (VariableValue::Bool(false), VariableValue::Bool(true)));
-                }
-                Type::Float => {
-                    let domain = variable
-                        .domain
-                        .as_ref()
-                        .unwrap_or_else(|| panic!("No domain for variable `{}`", identifier));
-                    match domain {
-                        Domain::Float(range) => {
-                            let min_v = *range.lower_bound().unwrap();
-                            let max_v = *range.upper_bound().unwrap();
-                            self.variable_bounds.insert(
-                                key,
-                                (VariableValue::Float(min_v), VariableValue::Float(max_v)),
-                            );
-                        }
-                        _ => panic!("Non-floating domain for float variable `{}`", identifier),
-                    };
-                }
-                _ => continue,
-            }
-        }
+        self.position.clear();
+        self.velocity.clear();
 
         for _ in &self.variable_bounds {
             let x = self.rng.random_range(0.0..1.0);
@@ -210,10 +211,8 @@ impl FlatzincBasedParticle {
             self.velocity.push(vel);
         }
 
-        self.normalizer = MiniZincSolutionNormalizer::new(self.variable_bounds.clone());
-        let mapped_position = self.position_to_named_map(&self.position);
-        let denormalized_position = self.normalizer.denormalize(&mapped_position);
-        self.local_best_position = mapped_position;
+        let denormalized_position = self.normalizer.denormalize(&self.position);
+        self.local_best_position = self.position.clone();
         (self.local_best_obj, self.local_best_violation) =
             self.evaluate_current_violations(&denormalized_position);
     }
@@ -227,20 +226,18 @@ impl FlatzincBasedParticle {
     /// * `c2` - The social coefficient for the velocity update, controlling how much the global best position influences the particle's current movement.
     pub fn update_velocity_and_position(
         &mut self,
-        global_best_denormalized: &HashMap<String, VariableValue>,
+        global_best_denormalized: &Vec<f64>,
         w: f64,
         c1: f64,
         c2: f64,
     ) {
         let global_best = self.normalizer.normalize(global_best_denormalized);
-        let global_best_vec = self.named_map_to_position(&global_best);
-        let local_best_vec = self.named_map_to_position(&self.local_best_position);
         let mut new_position: Vec<f64> = Vec::with_capacity(self.position.len());
 
         for (idx, vel) in self.velocity.iter_mut().enumerate() {
             let var_value = *self.position.get(idx).unwrap_or(&0.0);
-            let local_best_val = *local_best_vec.get(idx).unwrap_or(&var_value);
-            let global_best_val = *global_best_vec.get(idx).unwrap_or(&var_value);
+            let local_best_val = *self.local_best_position.get(idx).unwrap_or(&var_value);
+            let global_best_val = *global_best.get(idx).unwrap_or(&var_value);
 
             let r1: f64 = self.rng.random_range(0.0..1.0);
             let r2: f64 = self.rng.random_range(0.0..1.0);
@@ -262,8 +259,8 @@ impl FlatzincBasedParticle {
         }
 
         self.position = new_position;
-        let mapped_position = self.position_to_named_map(&self.position);
-        let denormalized_position = self.normalizer.denormalize(&mapped_position);
+        let denormalized_position = self.normalizer.denormalize(&self.position);
+        self.local_best_position = self.position.clone();
         let (candidate_obj, candidate_violation) =
             self.evaluate_current_violations(&denormalized_position);
 
@@ -279,7 +276,7 @@ impl FlatzincBasedParticle {
             self.local_best_obj,
             self.local_best_violation,
         ) {
-            self.local_best_position = mapped_position;
+            self.local_best_position = self.position.clone();
             self.local_best_obj = candidate_obj;
             self.local_best_violation = candidate_violation;
         } else {
@@ -295,28 +292,15 @@ impl FlatzincBasedParticle {
     /// A tuple containing the objective value (if defined) and the total violation of constraints for the current position of the particle, which are used for determining the quality of the solution and guiding the search process.
     pub fn evaluate_current_violations(
         &mut self,
-        denormalized_position: &HashMap<String, VariableValue>,
+        denormalized_position: &Vec<f64>,
     ) -> (Option<f64>, f64) {
-        for (var_name, var_value) in denormalized_position {
-            match var_value {
-                VariableValue::Bool(val) => {
-                    self.solution_provider
-                        .provide_bool(var_name.to_string(), *val);
-                }
-                VariableValue::Float(val) => {
-                    self.solution_provider
-                        .provide_float(var_name.to_string(), *val);
-                }
-                VariableValue::Int(val) => {
-                    self.solution_provider
-                        .provide_int(var_name.to_string(), *val);
-                }
-                VariableValue::Set(val) => {
-                    self.solution_provider
-                        .provide_set(var_name.to_string(), val.clone());
-                }
-            }
+        for (index, reg) in self.map_index_register.iter() {
+            let var_value = denormalized_position.get(*index).expect("Value for decision variable not found");
+            self.solution[*reg as usize] = Some(VariableValue::Float(*var_value));
         }
+
+        self.solution_provider.provide_solution(&self.solution);
+
         let result = self
             .invariant_evaluator
             .evaluate_invariants_graph(&self.solution_provider);
@@ -328,7 +312,7 @@ impl FlatzincBasedParticle {
     ///
     /// # Returns
     /// The HashMap containing the variable names and their corresponding values for the particle's local best position.
-    pub fn local_best_position(&self) -> HashMap<String, VariableValue> {
+    pub fn local_best_position(&self) -> Vec<f64> {
         self.normalizer.denormalize(&self.local_best_position)
     }
 
@@ -351,33 +335,6 @@ impl FlatzincBasedParticle {
     /// The unique identifier of the particle, which is used for tracking and debugging purposes.
     pub fn id(&self) -> i64 {
         self.id
-    }
-
-    fn position_to_named_map(&self, position: &[f64]) -> HashMap<String, f64> {
-        let mut map = HashMap::with_capacity(self.variable_index.len());
-        for (name, &one_based_idx) in &self.variable_index {
-            // convert to 0-based safely
-            let pos_idx = one_based_idx.saturating_sub(1);
-            let val = position.get(pos_idx).copied().unwrap_or(0.0);
-            map.insert(name.clone(), val);
-        }
-        map
-    }
-
-    fn named_map_to_position(&self, global_best: &HashMap<String, f64>) -> Vec<f64> {
-        let max_idx = match self.variable_index.values().copied().max() {
-            Some(m) => m,
-            None => return Vec::new(),
-        };
-        let mut pos = vec![0.0_f64; max_idx];
-        for (name, &val) in global_best {
-            if let Some(&one_based) = self.variable_index.get(name) {
-                if one_based >= 1 && one_based <= max_idx {
-                    pos[one_based - 1] = val;
-                }
-            }
-        }
-        pos
     }
 
     fn var_index(name: &str) -> Option<usize> {
@@ -418,7 +375,6 @@ impl FlatzincBasedPSO {
         c1: f64,
         c2: f64,
         fzn_path: PathBuf,
-        ozn_path: PathBuf,
     ) -> Self {
         Self {
             seed,
@@ -427,11 +383,10 @@ impl FlatzincBasedPSO {
             c1,
             c2,
             swarm: vec![FlatzincBasedParticle::new(); swarm_size as usize],
-            global_best_position: HashMap::new(),
+            global_best_position: Vec::new(),
             global_best_obj: None,
             global_best_violation: std::f64::INFINITY,
             fzn_path,
-            ozn_path,
         }
     }
 
@@ -445,7 +400,6 @@ impl FlatzincBasedPSO {
                 self.seed,
                 id as i64,
                 self.fzn_path.clone(),
-                self.ozn_path.clone(),
             );
 
             particle.random_initialize_position_and_velocity();
@@ -515,7 +469,6 @@ impl std::fmt::Debug for FlatzincBasedParticle {
             .field("variable_bounds_count", &self.variable_bounds.len())
             .field("stagnation_counter", &self.stagnation_counter)
             .field("fzn_path", &self.fzn_path)
-            .field("ozn_path", &self.ozn_path)
             .field("normalizer", &"<MiniZincSolutionNormalizer>")
             .field("solution_provider", &"<SolutionProvider>")
             .field("invariant_evaluator", &"<Evaluator>")
@@ -538,7 +491,6 @@ impl std::fmt::Debug for FlatzincBasedPSO {
             .field("global_best_obj", &self.global_best_obj)
             .field("global_best_violation", &self.global_best_violation)
             .field("fzn_path", &self.fzn_path)
-            .field("ozn_path", &self.ozn_path)
             .finish()
     }
 }

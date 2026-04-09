@@ -32,7 +32,7 @@ pub struct MiniEvaluator {
     /// The FlatZinc model being evaluated.
     fzn: FlatZinc,
     /// A map from variable names to their (min, max) bounds as `VariableValue` pairs.
-    variable_bounds: HashMap<String, (VariableValue, VariableValue)>,
+    variable_bounds: Vec<Option<(VariableValue, VariableValue)>>,
     /// A map from variable names to their corresponding register IDs.
     variable_register_map: HashMap<String, Register>,
     /// A vector representing the current solution values for each variable, indexed by their register IDs, used for efficient access during constraint evaluation.
@@ -55,8 +55,6 @@ pub struct MiniEvaluator {
     set_functional_evaluator: SetEvaluator,
     /// A variable assigner that assigns values to defined variables based on the constraints and arrays in the model.
     variable_assigner: VariableAssigner,
-    /// The current solution map that is being evaluated, mapping variable names to their assigned values.
-    solution: HashMap<String, VariableValue>,
 }
 
 /// Custom implementation of the `Debug` trait for `MiniEvaluator` to provide a more concise and relevant debug output.
@@ -67,7 +65,6 @@ impl fmt::Debug for MiniEvaluator {
             .field("violation_functions_len", &self.violation_functions.len())
             .field("verbose", &self.verbose)
             .field("arrays_hashmap_len", &self.arrays_hashmap.len())
-            .field("solution_len", &self.solution.len())
             .finish()
     }
 }
@@ -143,7 +140,7 @@ impl MiniEvaluator {
 
         let mut evaluator = Self {
             fzn,
-            variable_bounds: HashMap::new(),
+            variable_bounds: Vec::new(),
             variable_register_map,
             solution_vec,
             constraints,
@@ -155,7 +152,6 @@ impl MiniEvaluator {
             bool_functional_evaluator,
             set_functional_evaluator,
             variable_assigner,
-            solution: HashMap::new(),
         };
 
         evaluator.get_variable_bounds();
@@ -174,19 +170,11 @@ impl MiniEvaluator {
         &mut self,
         solution_provider: &SolutionProvider,
     ) -> (Option<f64>, f64) {
-        let partial_solution = solution_provider.solution_map();
-        let mut partial_solution_vec: Vec<Option<VariableValue>> =
-            vec![None; self.variable_register_map.len()];
-
-        for (var_id, index) in &self.variable_register_map {
-            if let Some(value) = partial_solution.get(var_id) {
-                partial_solution_vec[*index as usize] = Some(value.clone());
-            }
-        }
+        let partial_solution = solution_provider.get_partial_solution();
 
         let complete_solution_vec = self
             .variable_assigner
-            .assign_defined_variables(&partial_solution_vec);
+            .assign_defined_variables(&partial_solution);
 
         for (i, val_opt) in complete_solution_vec.iter().enumerate() {
             if let Some(val) = val_opt {
@@ -194,26 +182,15 @@ impl MiniEvaluator {
             }
         }
 
-        self.solution.clear();
-        for (var_id, index) in &self.variable_register_map {
-            if let Some(val) = complete_solution_vec
-                .get(*index as usize)
-                .and_then(|v| v.as_ref())
-            {
-                self.solution.insert(var_id.clone(), val.clone());
-            }
-        }
-
         let domain_violation = self.evaluate_domain_constraints();
         let (objective, constraint_violation) =
-            self.evaluate_constraint_list(&self.constraints.clone());
+            self.evaluate_constraint_list();
 
         (objective, constraint_violation + domain_violation)
     }
 
     fn evaluate_constraint_list(
         &mut self,
-        constraint_to_evaluate: &[CallWithDefines],
     ) -> (Option<f64>, f64) {
         if self.violation_functions.is_empty() {
             self.populate_violation_functions();
@@ -221,30 +198,10 @@ impl MiniEvaluator {
 
         let mut constraint_violation = 0.0;
 
-        let len = constraint_to_evaluate.len();
-        if len == 0 {
-            let mut objective: Option<f64> = None;
-            if let Some(objective_lit) = self.fzn.solve.objective.as_ref() {
-                let objective_id: &str = match objective_lit {
-                    Literal::Identifier(id) => id.as_str(),
-                    Literal::String(id) => id.as_str(),
-                    _ => panic!("Objective literal must be an identifier or string"),
-                };
-                if let Some(obj_val) = self.solution.get(objective_id) {
-                    match obj_val {
-                        VariableValue::Int(val) => objective = Some(*val as f64),
-                        VariableValue::Float(val) => objective = Some(*val),
-                        _ => log::error!("Objective variable must be numeric"),
-                    }
-                }
-            }
-            return (objective, constraint_violation);
-        }
-
         let vf_ref: &Vec<Arc<dyn Fn(&[VariableValue]) -> f64 + Send + Sync>> =
             &self.violation_functions;
 
-        for constraint in constraint_to_evaluate.iter() {
+        for constraint in self.constraints.iter() {
             if constraint.call.ann.is_empty() {
                 let idx = constraint.id;
                 let violation = (vf_ref[idx])(&self.solution_vec);
@@ -254,19 +211,18 @@ impl MiniEvaluator {
 
         let mut objective: Option<f64> = None;
         if let Some(objective_lit) = self.fzn.solve.objective.as_ref() {
-            let objective_id: &str = match objective_lit {
-                Literal::Identifier(id) => id.as_str(),
+            let objective_register = match objective_lit {
+                Literal::Identifier(id) => self.variable_register_map.get(id.as_str()).copied(),
                 _ => panic!("Objective must be an identifier or string"),
             };
-            if let Some(obj_val) = self.solution.get(objective_id) {
-                match obj_val {
-                    VariableValue::Int(val) => objective = Some(*val as f64),
-                    VariableValue::Float(val) => objective = Some(*val),
-                    _ => log::error!("Objective variable must be numeric"),
+
+            if let Some(reg) = objective_register {
+                if let Some(val) = self.solution_vec.get(reg as usize) {
+                    objective = Some(val.as_float());
                 }
             }
         }
-
+        
         (objective, constraint_violation)
     }
 
@@ -473,114 +429,114 @@ impl MiniEvaluator {
 
     fn evaluate_domain_constraints(&mut self) -> f64 {
         let mut violation = 0.0;
-
-        for (var_id, _var) in &self.fzn.variables {
-            if let Some((lower_bound, upper_bound)) = self.variable_bounds.get(var_id) {
-                if let Some(value) = self.solution.get(var_id) {
-                    match (value, lower_bound, upper_bound) {
-                        (
-                            VariableValue::Int(val),
-                            VariableValue::Int(lb),
-                            VariableValue::Int(ub),
-                        ) => {
-                            let mut v_amt = 0.0;
-                            if *val < *lb {
-                                v_amt = (*lb - *val) as f64;
-                            } else if *val > *ub {
-                                v_amt = (*val - *ub) as f64;
-                            }
-                            if v_amt > 0.0 {
-                                violation += v_amt;
-                                if self.verbose {
-                                    log::info!(
-                                        "Domain violation: variable `{}` value={} not in [{}, {}] -> +{}",
-                                        var_id,
-                                        val,
-                                        lb,
-                                        ub,
-                                        v_amt
-                                    );
-                                }
+        for (i, (bound_opt, value)) in self.variable_bounds.iter().zip(self.solution_vec.iter()).enumerate() {
+            if let Some((lower_bound, upper_bound)) = bound_opt {
+                match (value, lower_bound, upper_bound) {
+                    (
+                        VariableValue::Int(val),
+                        VariableValue::Int(lb),
+                        VariableValue::Int(ub),
+                    ) => {
+                        let mut v_amt = 0.0;
+                        if *val < *lb {
+                            v_amt = (*lb - *val) as f64;
+                        } else if *val > *ub {
+                            v_amt = (*val - *ub) as f64;
+                        }
+                        if v_amt > 0.0 {
+                            violation += v_amt;
+                            if self.verbose {
+                                log::info!(
+                                    "Domain violation: variable register {} value={} not in [{}, {}] -> +{}",
+                                    i,
+                                    val,
+                                    lb,
+                                    ub,
+                                    v_amt
+                                );
                             }
                         }
-                        (
-                            VariableValue::Float(val),
-                            VariableValue::Float(lb),
-                            VariableValue::Float(ub),
-                        ) => {
-                            let mut v_amt = 0.0;
-                            if *val < *lb {
-                                v_amt = (*lb - *val).abs();
-                            } else if *val > *ub {
-                                v_amt = (*val - *ub).abs();
-                            }
-                            if v_amt > 0.0 {
-                                violation += v_amt;
-                                if self.verbose {
-                                    log::info!(
-                                        "Domain violation: variable `{}` value={} not in [{}, {}] -> +{}",
-                                        var_id,
-                                        val,
-                                        lb,
-                                        ub,
-                                        v_amt
-                                    );
-                                }
+                    }
+                    (
+                        VariableValue::Float(val),
+                        VariableValue::Float(lb),
+                        VariableValue::Float(ub),
+                    ) => {
+                        let mut v_amt = 0.0;
+                        if *val < *lb {
+                            v_amt = (*lb - *val).abs();
+                        } else if *val > *ub {
+                            v_amt = (*val - *ub).abs();
+                        }
+                        if v_amt > 0.0 {
+                            violation += v_amt;
+                            if self.verbose {
+                                log::info!(
+                                    "Domain violation: variable register {} value={} not in [{}, {}] -> +{}",
+                                    i,
+                                    val,
+                                    lb,
+                                    ub,
+                                    v_amt
+                                );
                             }
                         }
-                        (
-                            VariableValue::Bool(val),
-                            VariableValue::Int(lb),
-                            VariableValue::Int(ub),
-                        ) => {
-                            let int_val = if *val { 1 } else { 0 };
-                            let mut v_amt = 0.0;
-                            if int_val < *lb {
-                                v_amt = (*lb - int_val) as f64;
-                            } else if int_val > *ub {
-                                v_amt = (int_val - *ub) as f64;
-                            }
-                            if v_amt > 0.0 {
-                                violation += v_amt;
-                                if self.verbose {
-                                    log::info!(
-                                        "Domain violation: variable `{}` value={} not in [{}, {}] -> +{}",
-                                        var_id,
-                                        val,
-                                        lb,
-                                        ub,
-                                        v_amt
-                                    );
-                                }
+                    }
+                    (
+                        VariableValue::Bool(val),
+                        VariableValue::Int(lb),
+                        VariableValue::Int(ub),
+                    ) => {
+                        let int_val = if *val { 1 } else { 0 };
+                        let mut v_amt = 0.0;
+                        if int_val < *lb {
+                            v_amt = (*lb - int_val) as f64;
+                        } else if int_val > *ub {
+                            v_amt = (int_val - *ub) as f64;
+                        }
+                        if v_amt > 0.0 {
+                            violation += v_amt;
+                            if self.verbose {
+                                log::info!(
+                                    "Domain violation: variable register {} value={} not in [{}, {}] -> +{}",
+                                    i,
+                                    val,
+                                    lb,
+                                    ub,
+                                    v_amt
+                                );
                             }
                         }
-                        _ => log::error!(
-                            "Mismatched variable and bounds types for variable `{}`",
-                            var_id
-                        ),
+                    }
+                    _ => {
+                        if self.verbose {
+                            log::error!(
+                                "Mismatched variable and bounds types for register {}",
+                                i
+                            );
+                        }
                     }
                 }
             }
         }
-
         violation
     }
 
     fn get_variable_bounds(&mut self) {
         let variables = self.fzn.variables.iter();
         for (identifier, variable) in variables {
-            let key = identifier.to_string();
-
             match variable.ty {
                 Type::Int => {
                     let domain = variable.domain.as_ref();
                     if domain.is_none() {
                         if variable.defined || (variable.introduced && variable.defined) {
+                            self.variable_bounds.push(None);
                             continue;
                         } else {
                             if self.verbose {
                                 log::warn!("Int variable `{}` is unbounded", identifier);
                             }
+                            self.variable_bounds.push(None);
                             continue;
                         }
                     } else {
@@ -588,30 +544,29 @@ impl MiniEvaluator {
                             Domain::Int(range) => {
                                 let min_v = *range.lower_bound().unwrap();
                                 let max_v = *range.upper_bound().unwrap();
-                                self.variable_bounds.insert(
-                                    key.clone(),
-                                    (VariableValue::Int(min_v), VariableValue::Int(max_v)),
-                                );
+                                self.variable_bounds.push(Some((VariableValue::Int(min_v), VariableValue::Int(max_v))));
                             }
                             _ => {
-                                log::error!("Non-integer domain for int variable `{}`", identifier)
+                                log::error!("Non-integer domain for int variable `{}`", identifier);
+                                self.variable_bounds.push(None);
                             }
-                        };
+                        }
                     }
                 }
                 Type::Bool => {
-                    self.variable_bounds
-                        .insert(key, (VariableValue::Int(0), VariableValue::Int(1)));
+                    self.variable_bounds.push(Some((VariableValue::Int(0), VariableValue::Int(1))));
                 }
                 Type::Float => {
                     let domain = variable.domain.as_ref();
                     if domain.is_none() {
                         if variable.defined || (variable.introduced && variable.defined) {
+                            self.variable_bounds.push(None);
                             continue;
                         } else {
                             if self.verbose {
                                 log::warn!("Float variable `{}` is unbounded", identifier);
                             }
+                            self.variable_bounds.push(None);
                             continue;
                         }
                     } else {
@@ -619,19 +574,18 @@ impl MiniEvaluator {
                             Domain::Float(range) => {
                                 let min_v = *range.lower_bound().unwrap();
                                 let max_v = *range.upper_bound().unwrap();
-                                self.variable_bounds.insert(
-                                    key,
-                                    (VariableValue::Float(min_v), VariableValue::Float(max_v)),
-                                );
+                                self.variable_bounds.push(Some((VariableValue::Float(min_v), VariableValue::Float(max_v))));
                             }
-                            _ => log::error!(
-                                "Non-floating domain for float variable `{}`",
-                                identifier
-                            ),
-                        };
+                            _ => {
+                                log::error!("Non-floating domain for float variable `{}`", identifier);
+                                self.variable_bounds.push(None);
+                            }
+                        }
                     }
                 }
-                _ => continue,
+                _ => {
+                    self.variable_bounds.push(None);
+                }
             }
         }
     }
@@ -675,7 +629,5 @@ impl MiniEvaluator {
             .collect()
     }
 
-    pub fn solution(&self) -> &HashMap<String, VariableValue> {
-        &self.solution
-    }
+
 }

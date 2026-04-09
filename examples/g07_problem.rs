@@ -8,13 +8,12 @@ const MODEL: &str = "g07";
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_time = std::time::Instant::now();
     let fzn_path = Path::new(".\\minizinc\\json_flatzinc").join(MODEL.to_string() + ".json");
-    let ozn_path = Path::new(".\\minizinc").join(MODEL.to_string() + ".ozn");
 
     let swarm_size: i64 = 100;
     let max_iteration: i64 = 500;
     let w: f64 = 0.669;
     let c1: f64 = 2.385;
-    let c2: f64 = 0.558;
+    let c2: f64 = 1.558;
     let seed = rand::random_range(0..100);
 
     let eval_fn = |solution: &[f64]| {
@@ -86,7 +85,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         c1,
         c2,
         fzn_path.to_path_buf(),
-        ozn_path.to_path_buf(),
     );
 
     let (obj_fltzinc, viol_fltzinc) = flatzinc_pso.search();

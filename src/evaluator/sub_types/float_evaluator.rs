@@ -14,7 +14,7 @@ pub const R_TERM_LIN_EXPR_REIF_INDEX: i64 = 3;
 pub const COEFF_LIN_CONSTR_INDEX: i64 = 0;
 pub const VARS_LIN_CONSTR_INDEX: i64 = 1;
 pub const CONST_LIN_CONSTR_INDEX: i64 = 2;
-pub const FLOAT_EQ_TOLERANCE: f64 = 1e-4;
+pub const FLOAT_EQ_TOLERANCE: f64 = 0.0;
 
 /// Evaluator for float constraints in MiniZinc models, providing functional evaluators for various float operations.
 ///
