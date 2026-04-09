@@ -62,11 +62,3 @@ To run an example:
 ```bash
 cargo run --release --example <example_name>
 ```
-
-## Run Tests
-
-To run all the available tests:
-
-```bash
-cargo test
-```
