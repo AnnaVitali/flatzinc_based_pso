@@ -164,9 +164,9 @@ checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "flatzinc-serde"
-version = "0.4.4"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6326022851a9eb73445a7839835c8dfc45dbfda3b2bda0dcd07073401b1b072"
+checksum = "1d5488f39d755f9d8a0938eb546023b5f5e88f023d21a1b4bf9f03267eeedf88"
 dependencies = [
  "rangelist",
  "serde",
