@@ -218,7 +218,11 @@ impl MiniEvaluator {
 
             if let Some(reg) = objective_register {
                 if let Some(val) = self.solution_vec.get(reg as usize) {
-                    objective = Some(val.as_float());
+                    objective = match val {
+                        VariableValue::Int(i) => Some(*i as f64),
+                        VariableValue::Float(f) => Some(*f),
+                        _ => panic!("Objective variable must be of type int or float"),
+                    }
                 }
             }
         }

@@ -44,6 +44,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let (obj_pso, viol_pso) = pso.search();
+    
+    let elapsed_time = start_time.elapsed();
+    println!("Elapsed time: {:.2?}", elapsed_time);
+    let start_time = std::time::Instant::now();
 
     let mut flatzinc_pso = FlatzincBasedPSO::new(
         seed,
@@ -60,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let elapsed_time = start_time.elapsed();
     println!("Elapsed time: {:.2?}", elapsed_time);
 
-    let best_known_obj = -1.0;
+    let best_known_obj = 1.393;
     println!("Best known objective: {}", best_known_obj);
 
     println!(

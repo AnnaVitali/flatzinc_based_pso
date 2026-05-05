@@ -47,6 +47,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (obj_pso, viol_pso) = pso.search();
 
+    let elapsed_time = start_time.elapsed();
+    println!("Elapsed time: {:.2?}", elapsed_time);
+    let start_time = std::time::Instant::now();
+
     let mut flatzinc_pso = FlatzincBasedPSO::new(
         seed,
         swarm_size,

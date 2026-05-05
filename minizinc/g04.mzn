@@ -18,3 +18,5 @@ constraint 9.300961 + 0.0047026 * x[3] * x[5] + 0.0012547 * x[1] * x[3] + 0.0019
 constraint -9.300961 - 0.0047026 * x[3] * x[5] - 0.0012547 * x[1] * x[3] - 0.0019085 * x[3] * x[4] + 20.0 <= 0.0;
 
 solve minimize objective;
+
+predicate float_times(var float: a, var float: b, var float: c)

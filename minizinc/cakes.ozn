@@ -1,0 +1,3 @@
+output ["b = ",showDzn(b),";\n","c = ",showDzn(c),";\n"];
+int: c;
+int: b;

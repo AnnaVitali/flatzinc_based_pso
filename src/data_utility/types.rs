@@ -36,7 +36,7 @@ impl VariableValue {
     /// Implement the `From` trait for `HashSet<i64>` to allow easy conversion to `VariableValue::Set`.
     /// 
     /// # Returns
-    /// A `VariableValue::Set` containing the provided set of integers.
+    /// A `VariableValue::Int` containing the provided integer.
     pub fn as_int(&self) -> i64 {
         match self {
             VariableValue::Int(value) => *value,

@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fzn_path = Path::new(".\\minizinc\\json_flatzinc").join(MODEL.to_string() + ".json");
 
     let swarm_size: i64 = 100;
-    let max_iteration: i64 = 500;
+    let max_iteration: i64 = 1;
     let w: f64 = 0.669;
     let c1: f64 = 2.385;
     let c2: f64 = 1.558;
@@ -61,6 +61,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let (obj_pso, viol_pso) = pso.search();
+
+    let elapsed_time = start_time.elapsed();
+    println!("Elapsed time: {:.2?}", elapsed_time);
+    let start_time = std::time::Instant::now();
 
     let mut flatzinc_pso = FlatzincBasedPSO::new(
         seed,

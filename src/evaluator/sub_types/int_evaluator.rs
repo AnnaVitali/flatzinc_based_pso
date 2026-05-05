@@ -695,7 +695,7 @@ impl IntEvaluator {
                 }
                 violation = ((left_side_term - constant_term).abs()) as f64;
             }
-
+        
             violation
         })
     }
@@ -810,6 +810,7 @@ impl IntEvaluator {
             .extract_int_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
 
         Box::new(move |solution: &[VariableValue]| {
+           
             let mut verbose_terms = String::new();
             let left_side_term =
                 Self::int_lin_left_term(verbose, &coeff, &registers, solution, &mut verbose_terms);
@@ -824,6 +825,7 @@ impl IntEvaluator {
                 }
                 violation = ((left_side_term - constant_term).abs()) as f64;
             }
+           
             violation
         })
     }
@@ -924,6 +926,7 @@ impl IntEvaluator {
             &constraint.call,
             &self.arrays,
         );
+        //println!("Vars involved in int_lin_ne: {:?}", vars_involved);
         let mut registers = Vec::new();
         for var in &vars_involved {
             let reg = self
@@ -933,6 +936,7 @@ impl IntEvaluator {
                 .expect("Variable in linear constraint not found in variable map");
             registers.push(reg);
         }
+        //println!("Registers: {:?}", registers);
         let constant_term: i64 = self
             .args_extractor
             .extract_int_value(CONST_LIN_CONSTR_INDEX, &constraint.call);
